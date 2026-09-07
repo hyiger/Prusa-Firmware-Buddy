@@ -245,7 +245,11 @@ static std::expected<TwoSpeedAnalysisResult, const char *> execute_and_analyze_s
     const char *label);
 
 static constexpr float position_tolerance = 0.01f;
-static constexpr uint8_t sensor_probe_attempts = 3;
+// Retry budget for the tool-offset-sensor touch. The loadcell analysis rejects a tap
+// cushioned by softened filament, and repeated taps also displace such residue, so a
+// generous budget is what makes the measurement survive a less-than-perfectly-clean
+// nozzle. Matches the pre-6.9.0 behaviour, where probe_here looped i <= TOTAL_PROBING.
+static constexpr uint8_t sensor_probe_attempts = TOTAL_PROBING + 1;
 
 static float measure_sensor_true_z(const xyz_pos_t &probe_pos) {
     debug_assert(std::abs(current_position.x - probe_pos.x) < position_tolerance);
