@@ -59,14 +59,18 @@ jobs:
         run: python3 utils/bootstrap.py
 
       - name: Build
-        run: python3 utils/build.py --preset coreone_indx --build-type release --final
+        # --bootloader yes builds only the image linked to run alongside the
+        # bootloader (FLASH_ORIGIN 0x08020200). The 'no' variant links to
+        # 0x08000000 for direct SWD flashing and is not usable via the
+        # printer's own update path, so it is not built or published.
+        run: python3 utils/build.py --preset coreone_indx --build-type release --final --bootloader yes
 
       - name: Collect artifacts
         id: collect
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp build/products/coreone_indx_release_*.bbf dist/
+          cp build/products/coreone_indx_release_boot_*.bbf dist/
           # Surface the resolved version so later steps and humans can see it.
           version="$(tr -d '[:space:]' < version.txt)"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
@@ -110,8 +114,8 @@ jobs:
 
           Requires a printer with the appendix broken, as the build is unsigned.
 
-          - \`coreone_indx_release_boot_*.bbf\` includes the bootloader.
-          - \`coreone_indx_release_noboot_*.bbf\` is firmware only.
+          Flash \`coreone_indx_release_boot_*.bbf\` from a USB drive, the same way
+          as a stock firmware update.
 
           Do not flash this on a non-INDX Core One. Both variants report
           \`PRINTER_TYPE 7\` and share a bootloader, so nothing will stop you.
