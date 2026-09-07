@@ -45,11 +45,15 @@ jobs:
           # should invalidate the cache.
           key: deps-${{ runner.os }}-${{ hashFiles('utils/bootstrap.py') }}
 
-      - name: Install bootstrap prerequisites
-        # bootstrap.py downloads the toolchain before it creates the project
-        # venv, so requests has to be present up front. README lists it as a
-        # system prerequisite for the same reason.
-        run: python3 -m pip install requests
+      - name: Install build prerequisites
+        # requests: bootstrap.py downloads the toolchain before it creates the
+        #   project venv, so it has to be present up front (see README).
+        # gettext: the resource step shells out to msgfmt to compile the
+        #   translation catalogues. Undocumented, and absent on a clean runner.
+        run: |
+          python3 -m pip install requests
+          sudo apt-get update
+          sudo apt-get install -y gettext
 
       - name: Bootstrap
         run: python3 utils/bootstrap.py
