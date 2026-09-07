@@ -120,8 +120,18 @@ jobs:
           Do not flash this on a non-INDX Core One. Both variants report
           \`PRINTER_TYPE 7\` and share a bootloader, so nothing will stop you.
           EOF
-          gh release create "$tag" dist/*.bbf dist/SHA256SUMS \
-            --target "${GITHUB_SHA}" \
-            --title "Core One INDX ${VERSION} (unsigned)" \
-            --notes-file notes.md \
-            --prerelease
+          # Upsert, so re-running against an existing tag refreshes the
+          # release instead of failing on an already-created one.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/*.bbf dist/SHA256SUMS --clobber
+            gh release edit "$tag" \
+              --title "Core One INDX ${VERSION} (unsigned)" \
+              --notes-file notes.md \
+              --prerelease
+          else
+            gh release create "$tag" dist/*.bbf dist/SHA256SUMS \
+              --target "${GITHUB_SHA}" \
+              --title "Core One INDX ${VERSION} (unsigned)" \
+              --notes-file notes.md \
+              --prerelease
+          fi
