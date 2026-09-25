@@ -92,21 +92,24 @@ for `-L`/`-LE`.
 
 ```bash
 # Run tests by name pattern (regex)
-ctest -R gcode                    # Run all tests with "gcode" in the name
-ctest -R "gcode|json"             # Run gcode OR json tests
-ctest -R "^gcode_parser"          # Tests starting with "gcode_parser"
+ctest --test-dir build/tests -R gcode                  # Run all tests with "gcode" in the name
+ctest --test-dir build/tests -R "gcode|json"           # Run gcode OR json tests
+ctest --test-dir build/tests -R "^gcode_parser"        # Tests starting with "gcode_parser"
 
 # Run tests by label/tag
-ctest -L translator               # Run only tests tagged with [translator]
-ctest -L "GcodeReader"            # Run only GcodeReader tests
+ctest --test-dir build/tests -L translator             # Run only tests tagged with [translator]
+ctest --test-dir build/tests -L "GcodeReader"          # Run only GcodeReader tests
 
 # Exclude tests by label
-ctest -LE slow                    # Skip slow tests (recommended)
+ctest --test-dir build/tests -LE slow                  # Skip slow tests (recommended)
 
 # Combine filters
-ctest -R gcode -LE slow           # Run gcode tests but skip slow ones
-ctest -L translator --verbose     # Run translator tests with verbose output
+ctest --test-dir build/tests -R gcode -LE slow         # Run gcode tests but skip slow ones
+ctest --test-dir build/tests -L translator --verbose   # Run translator tests with verbose output
 ```
+
+> Without `--test-dir`, ctest looks in the current directory and silently reports
+> `Total Tests: 0` outside a test build directory.
 
 **Common workflows:**
 - **Daily development:** `python3 utils/build_tests.py -t -- -LE slow` (fast tests only, reduce execution time by ~90%)
@@ -167,9 +170,9 @@ ninja -C build/tests test
 
 Example:
 ```bash
-ctest -R gcode -LE slow --verbose          # Run gcode tests, skip slow, verbose output
-ctest -N                                    # List all tests without running
-ctest -LE slow -N                          # List fast tests only
+ctest --test-dir build/tests -R gcode -LE slow --verbose   # Run gcode tests, skip slow, verbose output
+ctest --test-dir build/tests -N                            # List all tests without running
+ctest --test-dir build/tests -LE slow -N                   # List fast tests only
 ```
 
 ### Building with Debug Symbols
