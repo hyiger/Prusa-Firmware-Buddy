@@ -174,7 +174,7 @@ Run `prek run -c .pre-commit-config.yaml` (add `--all-files` to check everything
   - Never hand-edit `src/lang/po/*`. Prusa staff regenerate them in "Update translations" commits.
   - Changing an English msgid drops existing translations until the next update.
   - Fonts contain only the glyphs the build needs. A new non-ASCII glyph may need font or replacement-table work.
-- **Images:** put `src/gui/res/png/<name>_<W>x<H>.png` there, list it in `src/gui/res/<PRINTER>_used_imgs.txt`, and use `&img::<name>_<W>x<H>`. `doc/Pictures_in_FW.md` describes an obsolete flow.
+- **Images:** put `src/gui/res/png/<name>_<W>x<H>.png` there, list it in `src/gui/res/<PRINTER>_used_imgs.txt`, and use `&img::<name>_<W>x<H>`. If the list entry is missing, the build fails at link time. See `doc/Pictures_in_FW.md`.
 - **New G-code:** see the `add-gcode` skill.
   1. Declare it in `src/marlin_stubs/PrusaGcodeSuite.hpp`.
   2. Add a `case` in `src/marlin_stubs/gcode.cpp` (it is dispatched before Marlin's own handlers).

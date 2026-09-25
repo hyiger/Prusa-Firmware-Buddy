@@ -114,7 +114,8 @@ MsgBoxWarning(_("Nozzle is hot."), Responses_Ok);
 - **Icons:**
   - Add `src/gui/res/png/<name>_<W>x<H>.png` and list it in `src/gui/res/<PRINTER>_used_imgs.txt` for each printer that uses it; unlisted icons are not packed.
   - Use it as `&img::<name>_<W>x<H>`.
-  - Signature Oak builds overlay `png_brass/`. A unit test fails if a new orange icon lacks a brass variant.
+  - Signature Oak builds overlay `png_brass/`. A new icon with Prusa-orange pixels needs a brass copy there, or an entry in `NO_BRASS_REQUIRED` in `utils/generate-icon-parity-report.py`. CI's report lists the missing ones but doesn't fail the build.
+  - An icon missing from a printer's `_used_imgs.txt` compiles but fails to link (`undefined reference to img::...`).
 - **Display differences:** MINI (`HAS_MINI_DISPLAY()`, ST7789, footer inside menus) vs large (`HAS_LARGE_DISPLAY()`, ILI9488). Geometry lives in `include/guiconfig/GuiDefaults.hpp`. Some layouts have separate `resolution_240x320/` and `resolution_480x320/` dialog variants.
 
 ## Verify
