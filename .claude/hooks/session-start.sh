@@ -73,6 +73,7 @@ fi
 # SVD files, CrashDebug) are left for bootstrap.py to fetch on demand.
 tools_status="$(
     .venv/bin/python - <<'EOF'
+import shutil
 import sys
 
 sys.path.insert(0, 'utils')
@@ -80,6 +81,9 @@ import bootstrap
 
 # bootstrap prints progress to stdout; keep stdout for the result only.
 result_out, sys.stdout = sys.stdout, sys.stderr
+
+# bootstrap() creates this before installing; install_dependency() doesn't.
+bootstrap.dependencies_dir.mkdir(parents=True, exist_ok=True)
 
 required = ('cmake', 'ninja', 'clang-format')
 wanted = [
@@ -96,6 +100,8 @@ for dep in wanted:
         bootstrap.install_dependency(dep)
     except Exception as error:
         print(f'\n[session-start] failed to install {dep}: {error}', file=sys.stderr)
+        # A partial directory would pass recommended_version_is_available() next time.
+        shutil.rmtree(bootstrap.get_dependency_directory(dep), ignore_errors=True)
         missing.append(dep)
 
 if any(dep in required for dep in missing):
