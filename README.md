@@ -13,7 +13,7 @@ The currently supported models are:
 
 ### Requirements
 
-- Python 3.8 or newer
+- Python 3.8 or newer (3.12 or newer for building and running the unit tests)
 - system installation of Python's `requests` package (use either pip or your system package manager)
 
 ### Cloning this repository
@@ -27,7 +27,7 @@ Run `python utils/build.py`. The binaries are then going to be stored under `./b
 - Without any arguments, it will build a release version of the firmware for all supported printers and bootloader settings.
 - Use `--build-type` to select build configurations to be built (`debug`, `release`).
 - Use `--preset` to select for which printers the firmware should be built.
-- By default, it will build the firmware in "prerelease mode" set to `beta`. You can change the prerelease using `--prerelease alpha`, or use `--final` to build a final version of the firmware.
+- By default, the version gets a local build suffix (e.g. `6.10.1+1234.LOCAL`, where the number is the commit count). Use `--version-suffix` and `--version-suffix-short` to set the suffix explicitly, or `--final` to build without one.
 - Use `--host-tools` to include host tools in the build
 - Find more options using the `--help` flag!
 
@@ -85,7 +85,7 @@ With the XL, the situation gets a bit more complex. The firmware of XLBuddy cont
     - With the `ENABLE_PUPPY_BOOTLOAD` set to false, the project will disable Puppy flashing & interaction with Puppy bootloaders.
     - It is up to you to flash the correct firmware to the puppies (noboot variant).
 
-5. Keep bootloaders but do not write firmware on boot.
+4. Keep bootloaders but do not write firmware on boot.
     ```
     -DPUPPY_SKIP_FLASH_FW=YES
     ```
