@@ -55,7 +55,7 @@ Only the pinned ARM toolchain is supported. Distro toolchains are not a drop-in 
 - **Outputs:** products go to `build/products/<preset>_<type>_<boot|noboot>.{bin,bbf,elf,map}`. The build dir is `build/<preset>_<type>_<boot|noboot|emptyboot>`.
 - **Configs:** `CMakePresets.json` is **generated** from `utils/presets/presets.json`. Edit the latter, then run `python utils/build.py --generate-cmake-presets` (a prek hook does this too).
 - **CI:** CI builds release presets with `-DCUSTOM_COMPILE_OPTIONS:STRING="-Werror"`, so warnings are errors. See `utils/holly/build-pr.jenkins`.
-- **Stale README:** `README.md` mentions `--prerelease`, which no longer exists. The version suffix is `<auto>` (`+<build>.LOCAL`); `--final` removes it.
+- **Version suffix:** `<auto>` (`+<commit count>.LOCAL`) by default; `--final` removes it.
 
 ### Formatting and hooks
 
