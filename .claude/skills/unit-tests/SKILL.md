@@ -9,7 +9,7 @@ Unit tests are host-compiled with GCC; no ARM toolchain is needed. They use Catc
 
 ## Environment setup
 
-This matches CI, which runs on Ubuntu 24.04:
+In Claude Code on the web, `.claude/hooks/session-start.sh` has already done all of this, and `.venv/bin` is on `PATH`. Elsewhere, set it up to match CI (Ubuntu 24.04):
 
 ```bash
 sudo apt-get install -y gettext           # msgfmt, needed by the translator tests
