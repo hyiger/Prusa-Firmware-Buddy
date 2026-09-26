@@ -13,7 +13,7 @@ The currently supported models are:
 
 ### Requirements
 
-- Python 3.8 or newer (3.12 or newer for building and running the unit tests)
+- Python 3.9 to 3.12 (the pinned packages in `requirements.txt`, e.g. `numpy==1.26.4`, don't install on 3.8 or on 3.13 and newer); 3.12 for building and running the unit tests
 - system installation of Python's `requests` package (use either pip or your system package manager)
 
 ### Cloning this repository
