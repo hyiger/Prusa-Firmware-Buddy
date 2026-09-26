@@ -399,7 +399,7 @@ bool calibrate_xy_offset(PhysicalToolIndex tool, const tool_offset::ProbingConfi
             hotend_currently_applied_offset = hotend_offset[tool];
             return true;
         } else {
-            log_error(ToolOffsetCalib, "Measurement failed: %s", result.error());
+            log_error(ToolOffsetCalib, "Measurement failed: %s", result.error().message);
         }
 
         if (prompt_retry_with_cleaning(tool, WarningType::ToolOffsetCalibrationFailed, context) != Response::Retry) {
