@@ -91,6 +91,13 @@ struct ErrDesc {{
     std::array<ButtonOperations, 4> buttons;
     ErrType type;
 }};
+
+/// Help article location of an error that prusa.io/<code> does not cover
+struct ErrHelpUrl {{
+    ErrCode err_code;
+    /// URL without the scheme; the printer-specific error code is appended to it
+    const char *url_prefix;
+}};
 """
 
 buddy_list_template = \
@@ -100,6 +107,9 @@ buddy_list_template = \
 {include_items}
 
 inline constexpr ErrDesc error_list[] = {{{list_items}
+}};
+
+inline constexpr std::array<ErrHelpUrl, {help_url_count}> error_help_urls {{{help_url_items}
 }};
 """
 
@@ -171,12 +181,18 @@ def generate_header_file(yaml_file_name, header_file_name, printer_id, printer_c
             extra_text = f",\n        {{{', '.join(btns)}}}"
             extra_text += f",\n        ErrType::{err['type']}"
 
+            help_url_prefix = err.get("help_url_prefix")
+            if help_url_prefix is not None:
+                assert "://" not in help_url_prefix, f"help_url_prefix of {code} must not contain the scheme."
+                assert not any(c.isspace() or c == '"' for c in help_url_prefix), f"help_url_prefix of {code} contains a whitespace or a quote."
+
             err_list.append({
                 "id": err_id,
                 "code": err_code,
                 "title": err["title"],
                 "text": err["text"].translate(str.maketrans({"\n": "\\n", "\"": "\\\""})),
-                "extra_text": extra_text
+                "extra_text": extra_text,
+                "help_url_prefix": help_url_prefix
             })
 
     os.makedirs(header_file_name.parent, exist_ok=True)
@@ -193,6 +209,10 @@ def generate_header_file(yaml_file_name, header_file_name, printer_id, printer_c
         ErrCode::{err['id']}{err['extra_text']}
     }}""" for err in err_list)
 
+    help_urls = [err for err in err_list if err["help_url_prefix"] is not None]
+    help_url_items = ",".join(f"""
+    ErrHelpUrl {{ ErrCode::{err['id']}, "{err['help_url_prefix']}" }}""" for err in help_urls)
+
     include_items = "\n".join([f"#include <{item}>" for item in includes])
 
     if mmu:
@@ -206,7 +226,8 @@ def generate_header_file(yaml_file_name, header_file_name, printer_id, printer_c
         else:
             template = buddy_template
 
-    content = template.format(printer_code=int(printer_code), enum_items=enum_items, list_items=list_items, include_items=include_items)
+    content = template.format(printer_code=int(printer_code), enum_items=enum_items, list_items=list_items, include_items=include_items,
+                              help_url_count=len(help_urls), help_url_items=help_url_items)
 
     with open(header_file_name, 'w') as f:
         f.write(content)

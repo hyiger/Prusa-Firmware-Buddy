@@ -4,6 +4,7 @@
 #include <guiconfig/wizard_config.hpp>
 #include <find_error.hpp>
 #include <auto_layout.hpp>
+#include <gui/fonts.hpp>
 
 namespace {
 static constexpr uint8_t qr_size = GuiDefaults::QRSize;
@@ -76,27 +77,37 @@ void FrameQRPrompt::layout_contents() {
 
 #if HAS_LARGE_DISPLAY()
     // Two columns: text on the left, QR on the right.
-    const int16_t left_w = f.Width() - qr_size - spacing;
+    const int16_t left_w = text_column_width();
     const int16_t right_x = f.Left() + left_w + spacing;
+    const int16_t link_h = link_rows * row;
 
     // Right column: QR on top, "Scan me!" right below it.
     qr.SetRect(Rect16(right_x, f.Top(), qr_size, qr_size));
     scan_me.SetRect(Rect16(right_x, f.Top() + qr_size, qr_size, row + spacing));
 
     // Left column: info on top, "More details at" + link pinned to the bottom.
-    info.SetRect(Rect16(f.Left(), f.Top(), left_w, f.Height() - 2 * row));
-    details.SetRect(Rect16(f.Left(), f.Top() + f.Height() - 2 * row, left_w, row));
-    link.SetRect(Rect16(f.Left(), f.Top() + f.Height() - row, left_w, row));
+    info.SetRect(Rect16(f.Left(), f.Top(), left_w, f.Height() - row - link_h));
+    details.SetRect(Rect16(f.Left(), f.Top() + f.Height() - row - link_h, left_w, row));
+    link.SetRect(Rect16(f.Left(), f.Top() + f.Height() - link_h, left_w, link_h));
 #else // MINI
     // Single column (too narrow for two): info on top, then "More details at" +
     // link, then QR with "Scan me!" beside it pinned to the bottom.
     const int16_t qr_top = f.Top() + f.Height() - qr_size;
+    const int16_t link_h = link_rows * row;
     qr.SetRect(Rect16(f.Left(), qr_top, qr_size, qr_size));
     scan_me.SetRect(Rect16(f.Left() + qr_size + spacing, qr_top, f.Width() - qr_size - spacing, qr_size));
 
-    details.SetRect(Rect16(f.Left(), qr_top - spacing - 2 * row, f.Width(), row));
-    link.SetRect(Rect16(f.Left(), qr_top - spacing - row, f.Width(), row));
-    info.SetRect(Rect16(f.Left(), f.Top(), f.Width(), (qr_top - spacing - 2 * row) - f.Top()));
+    details.SetRect(Rect16(f.Left(), qr_top - spacing - row - link_h, f.Width(), row));
+    link.SetRect(Rect16(f.Left(), qr_top - spacing - link_h, f.Width(), link_h));
+    info.SetRect(Rect16(f.Left(), f.Top(), f.Width(), (qr_top - spacing - row - link_h) - f.Top()));
+#endif
+}
+
+Rect16::Width_t FrameQRPrompt::text_column_width() const {
+#if HAS_LARGE_DISPLAY()
+    return inner_frame.GetRect().Width() - qr_size - spacing;
+#else // MINI
+    return inner_frame.GetRect().Width();
 #endif
 }
 
@@ -109,6 +120,8 @@ FrameQRPrompt::FrameQRPrompt(window_frame_t *parent, FSMAndPhase fsm_phase, ErrC
 
     // link's internal buffer is used instead of link_buffer
     link.set_error_code(err_code);
+    link_rows = link.wrap(text_column_width() / resource_font(link.get_font())->w);
+    layout_contents();
 
     qr.set_error_code(err.err_code);
 }
