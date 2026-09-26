@@ -383,6 +383,16 @@ enum class PhasesWarning : PhaseUnderlyingType {
 #if HAS_TOOL_OFFSET_SENSOR()
     /// Blocking dialog shown when tool offset calibration fails. Lets the user abort or retry.
     ToolOffsetCalibrationFailed,
+    #if HAS_INDX()
+    ToolOffsetToolNotPicked,
+    ToolOffsetNozzleCleaningFailed,
+    ToolOffsetBedProbeFailed,
+    ToolOffsetSensorProbeFailed,
+    ToolOffsetSensorNoData,
+    ToolOffsetHeadReset,
+    ToolOffsetNozzleTooHot,
+    ToolOffsetHomingFailed,
+    #endif
     HotendOffsetUnsafeZDeviation,
     HotendOffsetUnsafeXyDeviation,
     HotendOffsetUnsafeSensorXY,
@@ -768,6 +778,16 @@ inline constexpr EnumArray<PhasesWarning, PhaseResponses, CountPhases<PhasesWarn
 #endif
 #if HAS_TOOL_OFFSET_SENSOR()
         { PhasesWarning::ToolOffsetCalibrationFailed, { Response::Retry, Response::Abort } },
+    #if HAS_INDX()
+        { PhasesWarning::ToolOffsetToolNotPicked, { Response::Retry, Response::Abort } },
+        { PhasesWarning::ToolOffsetNozzleCleaningFailed, { Response::Retry, Response::Abort } },
+        { PhasesWarning::ToolOffsetBedProbeFailed, { Response::Retry, Response::Abort } },
+        { PhasesWarning::ToolOffsetSensorProbeFailed, { Response::Retry, Response::Abort } },
+        { PhasesWarning::ToolOffsetSensorNoData, { Response::Retry, Response::Abort } },
+        { PhasesWarning::ToolOffsetHeadReset, { Response::Retry, Response::Abort } },
+        { PhasesWarning::ToolOffsetNozzleTooHot, { Response::Retry, Response::Abort } },
+        { PhasesWarning::ToolOffsetHomingFailed, { Response::Retry, Response::Abort } },
+    #endif
         { PhasesWarning::HotendOffsetUnsafeZDeviation, { Response::Retry, Response::Abort } },
         { PhasesWarning::HotendOffsetUnsafeXyDeviation, { Response::Retry, Response::Abort } },
         { PhasesWarning::HotendOffsetUnsafeSensorXY, { Response::Retry, Response::Abort } },

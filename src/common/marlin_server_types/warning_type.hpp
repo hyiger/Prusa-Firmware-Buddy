@@ -121,7 +121,20 @@ enum class WarningType : uint32_t {
 #endif
     AccelerometerCommunicationFailed,
 #if HAS_TOOL_OFFSET_SENSOR()
+    /// Tool offset calibration failed. On INDX, the XY scan did not locate the nozzle;
+    /// other printers report every failure with it.
     ToolOffsetCalibrationFailed,
+    #if HAS_INDX()
+    /// Causes of a failed tool offset calibration that ToolOffsetCalibrationFailed does not cover
+    ToolOffsetToolNotPicked,
+    ToolOffsetNozzleCleaningFailed,
+    ToolOffsetBedProbeFailed,
+    ToolOffsetSensorProbeFailed,
+    ToolOffsetSensorNoData,
+    ToolOffsetHeadReset,
+    ToolOffsetNozzleTooHot,
+    ToolOffsetHomingFailed,
+    #endif
     HotendOffsetUnsafeZDeviation,
     HotendOffsetUnsafeXyDeviation,
     HotendOffsetUnsafeSensorXY,

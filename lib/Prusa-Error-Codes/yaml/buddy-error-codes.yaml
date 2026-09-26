@@ -20,6 +20,9 @@
 # Attribute gui_layout ["red_screen", "warning_dialog"]
 #   Specify what pre-defined GUI layout is used to display this error. This is used to test if translated messages fit into the layout
 #   To add more pre-defined layout tests, edit Prusa-Firmware-Buddy/tests/unit/lang/text_fit/ & Prusa-Firmware-Buddy/utils/extract_error_texts.py
+# Attribute help_url_prefix (optional)
+#   Where the help article for this error lives, for errors that the prusa.io/<code> knowledge base does not cover.
+#   A URL without the scheme; the printer-specific five-digit error code is appended to it.
 
 Errors:
   - code: "XX101"
@@ -422,6 +425,80 @@ Errors:
     type: WARNING
     gui_layout: "warning_dialog"
     approved: true
+
+  # XX190 - XX197: causes of a failed tool offset calibration that XX130 does not cover
+
+  - code: "XX190"
+    printers: [COREONE_INDX, COREONEL_INDX]
+    title: "Tool Not Picked"
+    text: "The tool is not detected as picked. Make sure it sits correctly on the head, then retry.\nCaution: the nozzle may be hot."
+    id: "TOOL_OFFSET_TOOL_NOT_PICKED"
+    gui_layout: "warning_dialog"
+    help_url_prefix: "hyiger.github.io/coreone-indx-kb/codes/#"
+    approved: false
+
+  - code: "XX191"
+    printers: [COREONE_INDX, COREONEL_INDX]
+    title: "Nozzle Cleaning Failed"
+    text: "Nozzle cleaning before tool offset calibration failed. Make sure the nozzle cleaner is not blocked, then retry.\nCaution: the nozzle may be hot."
+    id: "TOOL_OFFSET_NOZZLE_CLEANING_FAILED"
+    gui_layout: "warning_dialog"
+    help_url_prefix: "hyiger.github.io/coreone-indx-kb/codes/#"
+    approved: false
+
+  - code: "XX192"
+    printers: [COREONE_INDX, COREONEL_INDX]
+    title: "Bed Probing Failed"
+    text: "Probing the bed for tool offset calibration failed. Make sure the nozzle tip and the print sheet are clean.\nCaution: the nozzle may be hot."
+    id: "TOOL_OFFSET_BED_PROBE_FAILED"
+    gui_layout: "warning_dialog"
+    help_url_prefix: "hyiger.github.io/coreone-indx-kb/codes/#"
+    approved: false
+
+  - code: "XX193"
+    printers: [COREONE_INDX, COREONEL_INDX]
+    title: "Sensor Probing Failed"
+    text: "Probing the tool offset sensor failed. Make sure the nozzle tip and the sensor are clean.\nCaution: the nozzle may be hot."
+    id: "TOOL_OFFSET_SENSOR_PROBE_FAILED"
+    gui_layout: "warning_dialog"
+    help_url_prefix: "hyiger.github.io/coreone-indx-kb/codes/#"
+    approved: false
+
+  - code: "XX194"
+    printers: [COREONE_INDX, COREONEL_INDX]
+    title: "No Offset Sensor Data"
+    text: "The tool offset sensor sent no usable data. Check the sensor cable and connectors, then retry."
+    id: "TOOL_OFFSET_SENSOR_NO_DATA"
+    gui_layout: "warning_dialog"
+    help_url_prefix: "hyiger.github.io/coreone-indx-kb/codes/#"
+    approved: false
+
+  - code: "XX195"
+    printers: [COREONE_INDX, COREONEL_INDX]
+    title: "Toolhead Board Restarted"
+    text: "The toolhead board restarted during tool offset calibration. Check the toolhead cable connection, then retry."
+    id: "TOOL_OFFSET_HEAD_RESET"
+    gui_layout: "warning_dialog"
+    help_url_prefix: "hyiger.github.io/coreone-indx-kb/codes/#"
+    approved: false
+
+  - code: "XX196"
+    printers: [COREONE_INDX, COREONEL_INDX]
+    title: "Nozzle Too Hot"
+    text: "The nozzle did not cool down enough for tool offset calibration. Make sure the print fan is working, then retry.\nCaution: the nozzle may be hot."
+    id: "TOOL_OFFSET_NOZZLE_TOO_HOT"
+    gui_layout: "warning_dialog"
+    help_url_prefix: "hyiger.github.io/coreone-indx-kb/codes/#"
+    approved: false
+
+  - code: "XX197"
+    printers: [COREONE_INDX, COREONEL_INDX]
+    title: "Homing Failed"
+    text: "Homing failed during tool offset calibration. Make sure nothing blocks the axes, then retry."
+    id: "TOOL_OFFSET_HOMING_FAILED"
+    gui_layout: "warning_dialog"
+    help_url_prefix: "hyiger.github.io/coreone-indx-kb/codes/#"
+    approved: false
 
   # TEMPERATURE    xx2xx
 
