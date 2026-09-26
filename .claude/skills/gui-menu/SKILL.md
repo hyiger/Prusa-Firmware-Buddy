@@ -13,10 +13,10 @@ description: Add or change on-printer UI in Buddy firmware - menu items (MI_* cl
 - **Menu screen:** `BasicScreenMenu<MI_A, MI_B, ...>` (`src/gui/basic_screen_menu.hpp`) prepends a Return item and uses the default footer. `ScreenMenu<EFooter::On|Off, MI_RETURN, ...>` gives full control. Items are **member objects**, constructed in place; reach one with `Item<MI_A>()`.
 - **Menu items** are named `MI_UPPER_SNAKE_CASE` and declared in `src/gui/MItem_<area>.hpp`, with the implementation in the matching `.cpp`. Newer generic items live in `src/gui/menu_item/`. The base classes:
   - `IWindowMenuItem`: plain item. Override `click(IWindowMenu&)` and optionally `Loop()`.
-  - `WI_ICON_SWITCH_OFF_ON_t`: on/off switch. Override `OnChange(size_t old_index)`.
+  - `WI_ICON_SWITCH_OFF_ON_t`: on/off switch. Override `OnChange(size_t)` and read the new state with `value()`; the index parameter is legacy.
   - `MenuItemSwitch` / `MenuItemSelectMenu`: pick from a list.
   - `MenuItemToggleSwitch`: tristate.
-  - `WiSpin`: numeric value, configured with a `NumericInputConfig`. Override `OnClick()` and read `value()`.
+  - `WiSpin`: numeric value, configured with a `NumericInputConfig`. Override `OnClick()` and read `value()`, which is a `float`, so cast it for integer settings.
   - `WiInfo<N>`: read-only value.
   - `MenuItemGcodeAction`: runs a G-code.
 - **Submenu entry:** `using MI_FOO = MI_SCREEN<N_("Foo"), class ScreenMenuFoo>;` in `src/gui/MItem_menus.hpp`, plus `template struct MI_SCREEN_CTOR<ScreenMenuFoo>;` and an `#include "screen_menu_foo.hpp"` in `src/gui/MItem_menus.cpp`.
@@ -50,8 +50,8 @@ description: Add or change on-printer UI in Buddy firmware - menu items (MI_* cl
    ```cpp
    MI_MY_FEATURE::MI_MY_FEATURE()
        : WI_ICON_SWITCH_OFF_ON_t(config_store().my_feature_enabled.get(), _(label), nullptr, is_enabled_t::yes, is_hidden_t::no) {}
-   void MI_MY_FEATURE::OnChange(size_t old_index) {
-       config_store().my_feature_enabled.set(!old_index);
+   void MI_MY_FEATURE::OnChange(size_t /*old_index*/) {
+       config_store().my_feature_enabled.set(value()); // click() has already flipped value()
    }
 
    static constexpr NumericInputConfig my_timeout_config {
@@ -60,7 +60,7 @@ description: Add or change on-printer UI in Buddy firmware - menu items (MI_* cl
    MI_MY_TIMEOUT::MI_MY_TIMEOUT()
        : WiSpin(config_store().my_timeout_s.get(), my_timeout_config, _(label), nullptr, is_enabled_t::yes, is_hidden_t::no) {}
    void MI_MY_TIMEOUT::OnClick() {
-       config_store().my_timeout_s.set(value());
+       config_store().my_timeout_s.set(static_cast<uint16_t>(value())); // value() is float; -Wfloat-conversion + CI's -Werror
    }
    ```
 

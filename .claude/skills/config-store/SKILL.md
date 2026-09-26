@@ -7,7 +7,7 @@ description: Add, change, deprecate or migrate persistent printer settings in th
 
 Settings live in `struct CurrentStore` in `src/persistent_stores/store_instances/config_store/store_definition.hpp`. Each item is identified in the EEPROM journal by a 14-bit ID, derived from a **name string** hashed at build time. The mechanics:
 - `utils/persistent_stores/journal_hashes_generator.py` → `build/.../gen_journal_hashes.hpp`.
-- Only values that differ from the default are written.
+- `set()` journals every change. When the journal fills up and migrates to the other bank (`ram_dump`), only values that differ from the default are rewritten, so a missing entry means "use the default".
 - All values are mirrored in RAM.
 
 These facts drive every rule below.
@@ -17,7 +17,7 @@ These facts drive every rule below.
 1. **Never change a hash name.** Existing printers' data is keyed by it.
 2. **Never delete an item.** Deprecate it: move it into `DeprecatedStore`.
 3. **Never reuse a name** that has ever been shipped, whether it is in `CurrentStore` or `DeprecatedStore`, even commented out. The generator scans comments too, so a commented-out item still reserves its ID. Old journal entries under that ID would be read as the new item.
-4. **Changing the default value is a deprecation.** Unchanged values were never written, so a new default silently changes what users have. Changing the stored type or meaning is also a deprecation.
+4. **Changing the default value is a deprecation.** Values equal to the default are not kept in EEPROM (they are never written, or they are dropped at the next bank migration), so a new default silently changes what users have. Changing the stored type or meaning is also a deprecation.
 5. **Order-sensitive enums and arrays that are persisted must never be reordered or shrunk.** Examples: `PresetFilamentType`, `extended_printer_type_model`, `SelftestResult` layouts. Only append.
 6. **Keep writes rare.** `set()` writes only on change, but EEPROM wears out. Don't persist values that change continuously during a print. Keep them in RAM, or use `ram_only = true`.
 7. **Never call `set()` from an ISR:** it takes a mutex. `get()` from an ISR returns the RAM value.
