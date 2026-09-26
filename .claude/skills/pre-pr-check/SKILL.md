@@ -43,6 +43,7 @@ prek run -c .pre-commit-config.yaml --source $BASE --origin HEAD --show-diff-on-
 ## 3. Unit tests (CI stage "Unit Tests")
 
 ```bash
+source .venv/bin/activate      # build_tests.py doesn't switch to .venv by itself
 python3 utils/build_tests.py --run -- --output-on-failure
 ```
 

@@ -40,6 +40,7 @@ description: Implement, modify or document a Prusa-specific G-code/M-code in Bud
 
    ```cpp
    #include "PrusaGcodeSuite.hpp"
+   #include <utils/variant_utils.hpp>   // stdext::get_optional
 
    /** \addtogroup G-Codes
     * @{
@@ -89,8 +90,19 @@ description: Implement, modify or document a Prusa-specific G-code/M-code in Bud
            return;
        }
 
-       const auto tool = get_target_physical_from_command(p);   // or get_target_virtual_from_command(p) for MMU slots
-       // ... call into a feature module with speed, reset.value_or(false), name ? *name : ""
+       // The tool helpers read T with option<uint8_t>(), which treats a malformed T as
+       // "not given" and falls back to the active tool, so validate T first.
+       if (invalid(p.option_expected<uint8_t>('T'))) {
+           return;
+       }
+       // Returns a variant: the tool index, or NoTool / ToolNotMapped / ToolParsingError.
+       const std::optional<PhysicalToolIndex> tool = stdext::get_optional<PhysicalToolIndex>(get_target_physical_from_command(p));
+       // (get_target_virtual_from_command(p) + VirtualToolIndex for MMU slots / tool-mapped indices)
+       if (!tool) {
+           return;
+       }
+
+       // ... call into a feature module with *tool, speed, reset.value_or(false), name ? *name : ""
        // keep the G-code a thin adapter
    }
 
