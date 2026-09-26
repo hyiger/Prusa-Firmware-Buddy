@@ -46,7 +46,7 @@ prek run -c .pre-commit-config.yaml --source $BASE --origin HEAD --show-diff-on-
 python3 utils/build_tests.py --run -- --output-on-failure
 ```
 
-Needs Python ≥ 3.12, the `requirements.txt` packages and gettext. See the `unit-tests` skill.
+Needs Python 3.12, the `requirements.txt` packages and gettext. See the `unit-tests` skill.
 
 ## 4. Firmware builds with `-Werror` (CI stage "Build")
 

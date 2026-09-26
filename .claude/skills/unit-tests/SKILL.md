@@ -17,7 +17,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt   # or: py
 source .venv/bin/activate
 ```
 
-- **Python ≥ 3.12 is mandatory for `utils/build_tests.py`.** It uses PEP 701 f-strings, so 3.11 fails with `SyntaxError: f-string: expecting '}'`. It also imports `tree_sitter` / `tree_sitter_cpp` at the top of the script.
+- **Use Python 3.12.** `utils/build_tests.py` uses PEP 701 f-strings, so 3.11 fails with `SyntaxError: f-string: expecting '}'`. `requirements.txt` pins `numpy==1.26.4`, which has no wheels for 3.13 or newer. It also imports `tree_sitter` / `tree_sitter_cpp` at the top of the script.
 - **Build-time generators need these packages** from `requirements.txt`: `nunavut` (`nnvg`, for the Cyphal DSDL types), `pyyaml` (error codes), `polib`, `pillow` (fonts), `cbor2`, `ndeflib`, `simple_parsing` (OpenPrintTag).
 - **How CMake finds Python:** it uses `<repo>/.venv`. Without one, activate another venv or export `BUDDY_NO_VIRTUALENV=1`.
 
