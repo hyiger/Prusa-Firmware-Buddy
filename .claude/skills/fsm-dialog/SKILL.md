@@ -58,31 +58,67 @@ void run_my_wizard() {
 
 ### GUI screen for a wizard
 
+Declare the frame hooks in the header and define them in the `.cpp` **after** the `Frames` alias. `Frames` depends on `ScreenMyWizard::FrameStorage`, so it cannot come before the class, and inline bodies inside the class could not see it. This mirrors `src/feature/door_sensor_calibration/screen_door_sensor_calibration.{hpp,cpp}`.
+
 ```cpp
+// screen_my_wizard.hpp
+#pragma once
+#include <screen_fsm.hpp>
+#include <radio_button_fsm.hpp>
+
 class ScreenMyWizard final : public ScreenFSM {
 public:
-    ScreenMyWizard() : ScreenFSM { N_("MY WIZARD"), GuiDefaults::RectScreenNoHeader } {
-        header.SetIcon(&img::selftest_16x16);
-        CaptureNormalWindow(inner_frame);
-        create_frame();
-    }
-    ~ScreenMyWizard() { destroy_frame(); }
+    ScreenMyWizard();
+    ~ScreenMyWizard();
+
     PhaseMyWizard get_phase() const { return GetEnumFromPhaseIndex<PhaseMyWizard>(fsm_base_data.GetPhase()); }
+
 protected:
-    void create_frame() final { Frames::create_frame(frame_storage, get_phase(), &inner_frame); }
-    void destroy_frame() final { Frames::destroy_frame(frame_storage, get_phase()); }
-    void update_frame() final { Frames::update_frame(frame_storage, get_phase(), fsm_base_data.GetData()); }
+    void create_frame() final;
+    void destroy_frame() final;
+    void update_frame() final;
 };
 
-// in the .cpp, anonymous namespace:
+// screen_my_wizard.cpp
+#include "screen_my_wizard.hpp"
+#include <img_resources.hpp>
+#include <standard_frame/frame_text_prompt.hpp>
+
+namespace {
 constexpr auto txt_intro = N_("Explain what will happen.");
+constexpr auto txt_done = N_("Done.");
+
 using Frames = FrameDefinitionList<ScreenMyWizard::FrameStorage,
     FrameDefinition<PhaseMyWizard::intro, FrameTextPrompt, PhaseMyWizard::intro, txt_intro>,
     FrameDefinition<PhaseMyWizard::working, FrameMyWorking>,   // custom frame: ctor(window_frame_t *parent) + update(fsm::PhaseData)
     FrameDefinition<PhaseMyWizard::done, FrameTextPrompt, PhaseMyWizard::done, txt_done>>;
+} // namespace
+
+ScreenMyWizard::ScreenMyWizard()
+    : ScreenFSM { N_("MY WIZARD"), GuiDefaults::RectScreenNoHeader } {
+    header.SetIcon(&img::selftest_16x16);
+    CaptureNormalWindow(inner_frame);
+    create_frame();
+}
+
+ScreenMyWizard::~ScreenMyWizard() {
+    destroy_frame();
+}
+
+void ScreenMyWizard::create_frame() {
+    Frames::create_frame(frame_storage, get_phase(), &inner_frame);
+}
+
+void ScreenMyWizard::destroy_frame() {
+    Frames::destroy_frame(frame_storage, get_phase());
+}
+
+void ScreenMyWizard::update_frame() {
+    Frames::update_frame(frame_storage, get_phase(), fsm_base_data.GetData());
+}
 ```
 
-- `FrameDefinition<Phase, Frame, Args...>` forwards `Args...` to the frame's constructor, after `parent`.
+- `FrameDefinition<Phase, Frame, args...>` passes its extra template arguments to the frame's constructor, after `parent`. They must be compile-time values such as `constexpr` string pointers (`auto... constructor_args`). Frames are placement-new'd into `ScreenFSM`'s 2016-byte `frame_storage`.
 - Standard frames live in `src/gui/standard_frame/`: `FrameTextPrompt`, `FramePrompt`, `FrameQRPrompt`, `FrameProgressPrompt`, `FrameWait`, `FrameCalibrationTextWithImage`, and others. Check each constructor for its parameters.
 - To send a small struct as phase data, use `fsm::serialize_data(my_struct)` on the server and `fsm::deserialize_data<T>(data)` in the frame. The struct must be trivially copyable and at most 4 bytes.
 - Buttons are drawn from the phase's response table (`RadioButtonFSM`), so you never hand-code button handling. Presses reach the server via `marlin_client::FSM_response(phase, response)`.

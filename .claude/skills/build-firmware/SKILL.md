@@ -32,7 +32,7 @@ python3 utils/build.py --preset <preset>[,<preset>...] --build-type <debug|relea
   - The default is `yes,no`, which builds both.
 - **Output:**
   - The build dir is `build/<preset>_<type>_<boot|noboot>/`.
-  - Products are `build/products/<preset>_<type>_<boot|noboot>.{bin,bbf,elf,map}`.
+  - Products are `build/products/<preset>_<type>_<boot|noboot>.{bin,bbf,map}`. The ELF is copied there without an extension, as `build/products/<preset>_<type>_<boot|noboot>`, so use that path for gdb.
   - The version gets a `+<commit count>.LOCAL` suffix unless you pass `--final`.
 - **Incremental rebuild** after the first configure: `.dependencies/ninja-1.10.2/ninja -C build/<cfg>`. This is much faster than rerunning `build.py`.
 - **Configure only**, e.g. to get `compile_commands.json` for clangd: add `--no-build`, then symlink `build/<cfg>/compile_commands.json` to the repo root.
