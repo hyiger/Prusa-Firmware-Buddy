@@ -22,6 +22,7 @@ Firmware for the Original Prusa 32-bit printers: MINI/MINI+, MK3.5(S), MK3.9(S),
 - The translator tests need gettext's `msgfmt`.
 
 ```bash
+source .venv/bin/activate                             # build_tests.py doesn't switch to .venv itself (build.py does); cloud sessions already have it on PATH
 python3 utils/build_tests.py --run -- -LE slow        # build all tests, then run everything except [slow]
 python3 utils/build_tests.py cobs_tests               # build only named targets (see --list)
 python3 utils/build_tests.py -t -- -R "COBS"          # run only, no rebuild; args after -- go to ctest
