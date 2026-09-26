@@ -68,24 +68,38 @@ description: Implement, modify or document a Prusa-specific G-code/M-code in Bud
            return; // parse errors are already reported to serial
        }
 
-       uint16_t speed = 50;
-       p.store_option_if_present('S', speed, uint16_t(1), uint16_t(500));   // range-checked; reports errors itself
+       // A malformed or out-of-range value is reported to serial by the parser, but the
+       // command would still run with the default. Abort instead.
+       using OptionError = GCodeParser2::OptionError;
+       const auto invalid = [](const auto &result) { return !result && result.error() == OptionError::parse_error; };
 
-       if (p.option<bool>('R').value_or(false)) { /* flag parameter */ }
+       uint16_t speed = 50;
+       if (invalid(p.store_option_if_present('S', speed, uint16_t(1), uint16_t(500)))) {
+           return;
+       }
+
+       const auto reset = p.option_expected<bool>('R');   // flag: "R", "R1" or "R0"
+       if (invalid(reset)) {
+           return;
+       }
 
        std::array<char, 32> name_buf;
-       if (const auto name = p.option<std::string_view>('N', name_buf)) { /* *name */ }
+       const auto name = p.option_expected<std::string_view>('N', name_buf);
+       if (invalid(name)) {
+           return;
+       }
 
        const auto tool = get_target_physical_from_command(p);   // or get_target_virtual_from_command(p) for MMU slots
-       // ... call into a feature module; keep the G-code a thin adapter
+       // ... call into a feature module with speed, reset.value_or(false), name ? *name : ""
+       // keep the G-code a thin adapter
    }
 
    /** @}*/
    ```
 
    - Use `GCodeParser2` (`src/common/gcode/gcode_parser.hpp`), not Marlin's global `parser`, in new code.
-     - `option<T>(key, [min, max])` returns `std::optional<T>`.
-     - `option_expected<T>` distinguishes a missing value from a parse error.
+     - `option<T>(key, [min, max])` returns `std::optional<T>`, which folds a parse error into "absent". Use it only where running with the default is acceptable; existing G-codes often do.
+     - `option_expected<T>` / `store_option_if_present` return `std::expected` with `OptionError::not_present` or `OptionError::parse_error`. On `parse_error`, return without acting; the parser has already reported the error.
      - `option_multikey<T>({'A','B'})` tries several keys.
      - Enum and custom types work when a parser specialization exists; see `tests/unit/common/gcode/parser`.
    - Report user errors with `SERIAL_ERROR_MSG("...")` / `SERIAL_ECHOLNPGM(...)` and return. Don't `bsod` on bad input.
