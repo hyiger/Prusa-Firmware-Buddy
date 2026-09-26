@@ -621,7 +621,7 @@ def main():
         '--bootloader',
         type=list_of(Bootloader, all_values=list(Bootloader), name='Bootloader'),
         default='yes,no',
-        help='What bootloader mode to use ("yes", "no" or "empty"; default: "empty").')
+        help='What bootloader mode to use ("yes", "no" or "empty"; default: "yes,no").')
     parser.add_argument(
         '--signing-key',
         type=Path,

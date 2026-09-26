@@ -1,10 +1,27 @@
 # How to run unit tests?
 
+## Prerequisites
+
+- GCC (the host compiler; other compilers are not supported for unit tests)
+- Python 3.12 with the packages from `requirements.txt`. Several build steps
+  run Python generators (Cyphal DSDL via `nnvg`, fonts, error codes, OpenPrintTag
+  test data). `utils/build_tests.py` itself needs at least 3.12, and the pinned
+  `numpy==1.26.4` does not install on 3.13 or newer.
+  `python3.12 utils/bootstrap.py` creates such a `.venv`, which CMake finds
+  automatically. Activate it (`source .venv/bin/activate`) before running the
+  commands below, or call `.venv/bin/python utils/build_tests.py` directly:
+  unlike `utils/build.py`, `build_tests.py` does not switch to `.venv` by itself,
+  and a system `python3` older than 3.12 cannot even start it.
+- gettext (`msgfmt`) for the translator tests
+
 ## Quick Start (Recommended)
 
 Use the automated build script for streamlined building and running tests:
 
 ```bash
+# Once per shell: use the project's Python 3.12 virtual environment (see Prerequisites)
+source .venv/bin/activate
+
 # Build all tests (uses all CPU cores automatically)
 python3 utils/build_tests.py
 
@@ -17,7 +34,7 @@ python3 utils/build_tests.py --run -- -LE slow
 # Run tests only (skip build) - can be run from anywhere
 python3 utils/build_tests.py --test
 python3 utils/build_tests.py -t -- -LE slow           # Run fast tests only
-python3 utils/build_tests.py -t -- -R gcode           # Run gcode tests only (based on Catch2 labels in test source files)
+python3 utils/build_tests.py -t -- -R gcode           # Run tests whose name contains "gcode"
 ```
 
 ### Build Options
@@ -75,25 +92,31 @@ python3 utils/build_tests.py -t -- --rerun-failed      # Re-run failed tests
 
 ## Running Specific Tests (Recommended for Fast Iteration)
 
-**You don't need to run all tests every time!** CTest provides powerful filtering:
+**You don't need to run all tests every time!** CTest provides powerful filtering.
+Test names are the Catch2 `TEST_CASE` names (not the CMake target names), and `-R`
+is a case-sensitive regular expression over them. Catch2 tags become ctest labels
+for `-L`/`-LE`.
 
 ```bash
 # Run tests by name pattern (regex)
-ctest -R gcode                    # Run all tests with "gcode" in the name
-ctest -R "gcode|json"             # Run gcode OR json tests
-ctest -R "^gcode_parser"          # Tests starting with "gcode_parser"
+ctest --test-dir build/tests -R gcode                  # Run all tests with "gcode" in the name
+ctest --test-dir build/tests -R "gcode|json"           # Run gcode OR json tests
+ctest --test-dir build/tests -R "^gcode_parser"        # Tests starting with "gcode_parser"
 
 # Run tests by label/tag
-ctest -L translator               # Run only tests tagged with [translator]
-ctest -L "GcodeReader"            # Run only GcodeReader tests
+ctest --test-dir build/tests -L translator             # Run only tests tagged with [translator]
+ctest --test-dir build/tests -L "GcodeReader"          # Run only GcodeReader tests
 
 # Exclude tests by label
-ctest -LE slow                    # Skip slow tests (recommended)
+ctest --test-dir build/tests -LE slow                  # Skip slow tests (recommended)
 
 # Combine filters
-ctest -R gcode -LE slow           # Run gcode tests but skip slow ones
-ctest -L translator --verbose     # Run translator tests with verbose output
+ctest --test-dir build/tests -R gcode -LE slow         # Run gcode tests but skip slow ones
+ctest --test-dir build/tests -L translator --verbose   # Run translator tests with verbose output
 ```
+
+> Without `--test-dir`, ctest looks in the current directory and silently reports
+> `Total Tests: 0` outside a test build directory.
 
 **Common workflows:**
 - **Daily development:** `python3 utils/build_tests.py -t -- -LE slow` (fast tests only, reduce execution time by ~90%)
@@ -112,52 +135,51 @@ python3 utils/build_tests.py --coverage
 python3 utils/build_tests.py --coverage -- -R gcode
 ```
 
-Coverage builds use a separate build directory (`build_tests_coverage`) so they don't interfere with regular test builds.
+Coverage builds use a separate build directory (`build/tests_coverage`) so they don't interfere with regular test builds.
 
 ## Manual Building (Alternative)
 
 If you prefer to build manually or need more control:
 
 ```bash
-# Create build folder and run cmake
-mkdir -p build_tests && cd build_tests
-cmake .. -G Ninja -DBOARD=BUDDY
+# Configure (from the repository root; build/tests is the directory build_tests.py uses too)
+cmake -S . -B build/tests -G Ninja -DBOARD=BUDDY
 
 # Build all unit tests
-ninja tests
+ninja -C build/tests tests
 ```
 
 > In case you don't have sufficient CMake or Ninja installed, you can use the ones downloaded by bootstrap.py:
 > ```bash
-> export PATH="$(python ../utils/bootstrap.py --print-dependency-directory cmake)/bin:$PATH"
-> export PATH="$(python ../utils/bootstrap.py --print-dependency-directory ninja):$PATH"
+> export PATH="$(python utils/bootstrap.py --print-dependency-directory cmake)/bin:$PATH"
+> export PATH="$(python utils/bootstrap.py --print-dependency-directory ninja):$PATH"
 > ```
 
 ### Running Tests Manually
 
 ```bash
 # Using CTest
-ctest
+ctest --test-dir build/tests
 
 # Using CMake directly
-cmake --build . --target test
+cmake --build build/tests --target test
 
 # Using Ninja
-ninja test
+ninja -C build/tests test
 ```
 
 ### Useful CTest Flags
 
-- `--output-on-failure`: Show test output only when tests fail (default behavior)
+- `--output-on-failure`: Show the output of failing tests (not enabled by default; CI uses it)
 - `--verbose`: Always show all test output
 - `--rerun-failed`: Re-run only tests that failed last time
 - `-N`: List tests that would run without actually running them
 
 Example:
 ```bash
-ctest -R gcode -LE slow --verbose          # Run gcode tests, skip slow, verbose output
-ctest -N                                    # List all tests without running
-ctest -LE slow -N                          # List fast tests only
+ctest --test-dir build/tests -R gcode -LE slow --verbose   # Run gcode tests, skip slow, verbose output
+ctest --test-dir build/tests -N                            # List all tests without running
+ctest --test-dir build/tests -LE slow -N                   # List fast tests only
 ```
 
 ### Building with Debug Symbols
@@ -169,7 +191,7 @@ To enable debugging, build with the debug flag:
 python3 utils/build_tests.py --debug
 
 # Or manually
-cmake .. -G Ninja -DBOARD=BUDDY -DCMAKE_BUILD_TYPE=Debug
+cmake -S . -B build/tests -G Ninja -DBOARD=BUDDY -DCMAKE_BUILD_TYPE=Debug
 ```
 
 ### Debugging with GDB
@@ -179,7 +201,7 @@ You can debug tests using GDB, but the approach depends on whether the test has 
 #### For simple tests (no external dependencies):
 Run GDB directly from the main project folder:
 ```bash
-gdb ./build_tests/tests/unit/path/to/test_executable
+gdb ./build/tests/tests/unit/path/to/test_executable
 ```
 
 #### For tests with external dependencies:
@@ -187,7 +209,7 @@ These tests must be run from their executable's directory to properly locate dep
 
 1. Navigate to the executable's directory:
 ```bash
-cd build_tests/tests/unit/common/gcode/reader
+cd build/tests/tests/unit/common/gcode/reader
 ```
 
 2. Start GDB and specify the source directory and the test executable:
@@ -204,7 +226,8 @@ gdb -d <path_to_buddy> test_executable
 2. Store your unittest cases within this directory together with their dependencies.
     Don't use the same file name for testing file and source file. Use '.cpp' extension.
 3. Add a CMakeLists.txt with description on how to build your tests.
-    - See other unit tests for examples.
+    - See other unit tests for examples, e.g. `tests/unit/common/ring_allocator/CMakeLists.txt`.
+    - Register the executable with `add_catch_test(<target>)`, which links Catch2, adds it to the `tests` target and makes its test cases visible to ctest.
     - Don't forget to register any directory you add using `add_subdirectory` in CMakeLists.txt in the same directory.
 
 ## Tests on Windows
@@ -216,11 +239,9 @@ gdb -d <path_to_buddy> test_executable
 5. Run these to prepare for test:
 
 ```bash
-mkdir -p build_tests \
-&& cd build_tests \
-&& rm -rf * \
-&& export PATH="$(python ../utils/bootstrap.py --print-dependency-directory cmake)/bin:$PATH" \
-&& export PATH="$(python ../utils/bootstrap.py --print-dependency-directory ninja):$PATH" \
+rm -rf build/tests \
+&& export PATH="$(python utils/bootstrap.py --print-dependency-directory cmake)/bin:$PATH" \
+&& export PATH="$(python utils/bootstrap.py --print-dependency-directory ninja):$PATH" \
 && export CTEST_OUTPUT_ON_FAILURE=1 \
-&& cmake .. -G Ninja
+&& cmake -S . -B build/tests -G Ninja -DBOARD=BUDDY
 ```

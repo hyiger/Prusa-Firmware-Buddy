@@ -1,37 +1,43 @@
 # Pictures in firmware
 
-## How to get picture to firmware
-There are few steps you need to do to get your picture to firmware
-1. Get the picture in PNG format
-2. convert it to .c file with binary representation of the picture
-3. put the png and .c file to its corresponding folders in src/res
-4. include the .c file in resource.c
-5. Create resource endtry in resource.c add the entry to enum in resource.h as IDR_name_of_the_picture
-6. Use the picture under its resource name
+Icons and pictures are stored as PNG files and packed at build time. They are
+not compiled into the firmware binary. At runtime they are read from
+`/internal/res/qoi.data`, which is part of the resources that the `.bbf`
+installs into the printer's internal flash.
 
-## How to use png2cc.py
+## Adding a picture
 
-### To use the script you need to have installed:
+1. Save the picture as an RGBA PNG named `<name>_<width>x<height>.png` in
+   `src/gui/res/png/`, e.g. `arrow_down_12x12.png`.
+2. Add the file name to `src/gui/res/<PRINTER>_used_imgs.txt` for every printer
+   that shows it.
+3. Use it in code as `&img::<name>_<width>x<height>`, after
+   `#include <img_resources.hpp>`.
 
-- python interpreter 3.7 or higher
--pip 1.5 or higher
-- Wand package
-  - [link to installation guide](https://docs.wand-py.org/en/0.6.7/guide/install.html)
-- image magick at least version 7
-  - haven't found image magick version 7 on ubuntu, so on ubuntu you need to build it from source
-    - didn't check other distros, so please leave your experiences under this line
-  - Windows and macOS should be OK with just following the instructions on the site
+## How it works
 
-### How to use the script
-The script has two operation modes file and folder mode
-#### File mode
-In file mode it expects two inputs source png file
-```shell
-python png2cc.py src_file.png
-```
+- `src/resources/QoiGenerator.cmake` runs `utils/qoi_packer.py` on
+  `src/gui/res/png/`.
+- **Listed pictures:** the packer QOI-encodes every picture listed in the
+  printer's `_used_imgs.txt` into `qoi.data`. It also emits an
+  `inline constexpr Resource <name>(offset, width, height);` into the generated
+  `qoi_resources.gen`, which `src/gui/img_resources.hpp` includes inside
+  `namespace img`.
+- **Unlisted pictures** are only declared (`extern Resource <name>;`). Using one
+  on a printer whose list doesn't contain it compiles but fails to link with an
+  undefined reference to `img::<name>`. Add it to that printer's list.
+- `qoi.data` goes into the resources tarball appended to the `.bbf`. At boot,
+  if the installed resources don't match the firmware, the printer installs
+  them from the matching `.bbf` on the USB drive, or on the host over the
+  debugger (semihosting). See `src/resources/bootstrap.cpp`.
 
-#### Folder mode
-In folder mode the script processes all png files in the first level of the folder. You need to specify the source and destination folder
-```shell
-python png2cc.py src_folder --folder=dst_folder
-```
+## Signature Oak (brass) variants
+
+The `coreone_oak` build overlays `src/gui/res/png_brass/` over
+`src/gui/res/png/`: a PNG with the same file name in `png_brass/` replaces the
+standard one. Standard icons that contain Prusa orange need a brass
+counterpart.
+
+`utils/generate-icon-parity-report.py` lists the icons that are missing one.
+CI runs it as an informational report. Icons that intentionally stay orange
+belong in its `NO_BRASS_REQUIRED` set.

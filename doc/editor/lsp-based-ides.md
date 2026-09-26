@@ -1,19 +1,12 @@
 ### Development with LSP-based IDEs (Visual Studio [Code], Vim, Sublime Text, etc.)
 
 1. Run `python utils/bootstrap.py` to download required dependencies.
-2. Create a build directory and enter it (`mkdir build`, `cd build`).
-3. Invoke CMake directly with your configuration, for example:
+2. From the repository root, configure the project with one of the CMake presets, for example:
 
     ```bash
-    cmake .. --preset mini \
-             -G Ninja \
-             -DCMAKE_EXPORT_COMPILE_COMMANDS=YES \
-             -DBOOTLOADER=YES \
-             -DCMAKE_BUILD_TYPE=Debug
+    .dependencies/cmake-3.28.3/bin/cmake --preset mini_debug_boot
     ```
 
-    See the header of `./CMakeLists.txt` for more command-line options (most of them are one-to-one mapped with `build.py`'s options).
-4. And invoke `ninja`. It will generate a `compile_commands.json` file, that an LSP server can pick up and use to provide autocompletion to your editor (we recommend using `clangd`).
-5. Install some spell checker (optional but recommended).
-
-> This assumes you have sufficient version of cmake and ninja available in your PATH.
+    Presets are named `<printer preset>_<debug|release>_<boot|noboot>` (list them with `cmake --list-presets`). They are generated from `utils/presets/presets.json`. A preset sets the generator (Ninja), the toolchain, the build type and the build directory (`build/<preset name>`). Extra options can be added as `-DNAME=VALUE`; see `ProjectOptions.cmake` for the available ones (most of them map one-to-one to `build.py`'s options).
+3. Configuring generates `build/<preset name>/compile_commands.json`, which an LSP server can pick up to provide autocompletion (we recommend `clangd`). Point your editor to it or symlink it to the repository root (`ln -s build/mini_debug_boot/compile_commands.json`). Build with `.dependencies/ninja-1.10.2/ninja -C build/mini_debug_boot`.
+4. Install some spell checker (optional but recommended).

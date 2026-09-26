@@ -488,7 +488,7 @@ Examples:
         '--coverage',
         action='store_true',
         help=
-        'Generate HTML coverage report. Uses a separate build directory (build_tests_coverage by default).'
+        'Generate HTML coverage report. Uses a separate build directory (build/tests_coverage by default).'
     )
 
     # Manually split argv on '--' to separate script args from ctest args
