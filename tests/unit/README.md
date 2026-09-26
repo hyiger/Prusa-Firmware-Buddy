@@ -3,9 +3,10 @@
 ## Prerequisites
 
 - GCC (the host compiler; other compilers are not supported for unit tests)
-- Python 3.12 or newer with the packages from `requirements.txt`. Several
-  build steps run Python generators (Cyphal DSDL via `nnvg`, fonts, error codes,
-  OpenPrintTag test data), and `utils/build_tests.py` itself needs 3.12.
+- Python 3.12 with the packages from `requirements.txt`. Several build steps
+  run Python generators (Cyphal DSDL via `nnvg`, fonts, error codes, OpenPrintTag
+  test data). `utils/build_tests.py` itself needs at least 3.12, and the pinned
+  `numpy==1.26.4` does not install on 3.13 or newer.
   `python3.12 utils/bootstrap.py` creates such a `.venv`, which CMake finds
   automatically.
 - gettext (`msgfmt`) for the translator tests
