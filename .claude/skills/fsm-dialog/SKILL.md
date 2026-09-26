@@ -14,6 +14,7 @@ Reference implementation to copy from, small and modern: **door sensor calibrati
 ```cpp
 #include <marlin_server.hpp>
 #include <client_response.hpp>
+#include <bsod/bsod.h>
 
 void run_my_wizard() {
     marlin_server::FSM_Holder holder { PhaseMyWizard::intro };   // creates the FSM; destroys it on scope exit (nestable)
@@ -24,6 +25,7 @@ void run_my_wizard() {
     default: bsod_unreachable();
     }
 
+    const uint8_t progress_pct = 0;                                            // PhaseData is std::array<uint8_t, 4>
     marlin_server::fsm_change(PhaseMyWizard::working, fsm::PhaseData { progress_pct, 0, 0, 0 });  // progress/data for the GUI
     do_work();                                    // long work must call idle() regularly
     marlin_server::fsm_change(PhaseMyWizard::done);
