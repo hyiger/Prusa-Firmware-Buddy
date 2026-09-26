@@ -20,6 +20,9 @@
 # Attribute gui_layout ["red_screen", "warning_dialog"]
 #   Specify what pre-defined GUI layout is used to display this error. This is used to test if translated messages fit into the layout
 #   To add more pre-defined layout tests, edit Prusa-Firmware-Buddy/tests/unit/lang/text_fit/ & Prusa-Firmware-Buddy/utils/extract_error_texts.py
+# Attribute help_url_prefix (optional)
+#   Where the help article for this error lives, for errors that the prusa.io/<code> knowledge base does not cover.
+#   A URL without the scheme; the printer-specific five-digit error code is appended to it.
 
 Errors:
   - code: "XX101"

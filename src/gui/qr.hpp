@@ -47,7 +47,7 @@ public:
 /**
  * GUI widget for displaying QR codes for specific error code.
  */
-class QRErrorUrlWindow : public QRDynamicStringWindow<46> {
+class QRErrorUrlWindow : public QRDynamicStringWindow<64> {
 public:
     QRErrorUrlWindow(window_t *parent, Rect16 rect, ErrCode ec);
     QRErrorUrlWindow(window_t *parent, Rect16 rect);
