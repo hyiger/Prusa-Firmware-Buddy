@@ -43,7 +43,7 @@ Both `coreone` and `coreone_oak` share `PrinterModelCompatibilityGroup::coreone`
 
 ### Brass icon overlay
 
-Only icons that differ from standard are kept in `png_brass/` (171 of 256). CMake copies standard icons first, then brass on top — only matching filenames get replaced. A unit test scans standard icons for orange pixels and fails if a brass override is missing, so new icons added upstream won't silently ship with the wrong color.
+Only icons that differ from standard are kept in `png_brass/` (171 of 256). CMake copies standard icons first, then brass on top — only matching filenames get replaced. `utils/generate-icon-parity-report.py` scans standard icons for orange pixels and lists those without a brass override; CI publishes it as an informational report, so new icons added upstream are flagged instead of silently shipping with the wrong color.
 
 ### MMU
 
