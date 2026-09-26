@@ -52,7 +52,7 @@ python3 utils/build.py ... --skip-bootstrap --toolchain cmake/AnyGccArmNoneEabi.
 
 Only the pinned ARM toolchain is supported. Distro toolchains are not a drop-in replacement: for example, Ubuntu 24.04's `gcc-arm-none-eabi` 13.2 fails on `PRId64` with its newlib-nano.
 
-- **Outputs:** products go to `build/products/<preset>_<type>_<boot|noboot>.{bin,bbf,elf,map}`. The build dir is `build/<preset>_<type>_<boot|noboot|emptyboot>`.
+- **Outputs:** products go to `build/products/<preset>_<type>_<boot|noboot>.{bin,bbf,map}`, and the ELF goes to the same path with no extension. The build dir is `build/<preset>_<type>_<boot|noboot|emptyboot>`, where the ELF is `firmware`.
 - **Configs:** `CMakePresets.json` is **generated** from `utils/presets/presets.json`. Edit the latter, then run `python utils/build.py --generate-cmake-presets` (a prek hook does this too).
 - **CI:** CI builds release presets with `-DCUSTOM_COMPILE_OPTIONS:STRING="-Werror"`, so warnings are errors. See `utils/holly/build-pr.jenkins`.
 - **Version suffix:** `<auto>` (`+<commit count>.LOCAL`) by default; `--final` removes it.
