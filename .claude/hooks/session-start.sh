@@ -55,7 +55,12 @@ if [ -x .venv/bin/python ] && ! is_py312 .venv/bin/python; then
 fi
 if [ ! -x .venv/bin/python ]; then
     log "creating .venv with $PYTHON"
-    "$PYTHON" -m venv --prompt buddy .venv
+    # Debian/Ubuntu ship venv/ensurepip separately from the interpreter.
+    if ! "$PYTHON" -m venv --prompt buddy .venv >&2; then
+        rm -rf .venv
+        apt_install python3.12-venv
+        "$PYTHON" -m venv --prompt buddy .venv >&2
+    fi
 fi
 
 requirements_hash="$(sha256sum requirements.txt | cut -d' ' -f1)"
@@ -118,7 +123,12 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
     } >>"$CLAUDE_ENV_FILE"
 fi
 
-echo "Buddy dev environment ready: .venv ($(.venv/bin/python --version)) with requirements.txt is on PATH," \
+if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+    venv_note="is on PATH"
+else
+    venv_note="is NOT on PATH (no CLAUDE_ENV_FILE); run 'source .venv/bin/activate' first"
+fi
+echo "Buddy dev environment ready: .venv ($(.venv/bin/python --version)) with requirements.txt $venv_note," \
     "gettext installed, pinned cmake/ninja/clang-format 16 in .dependencies/." \
     "Unit tests: python3 utils/build_tests.py --run -- -LE slow."
 if [ -n "$tools_status" ]; then
