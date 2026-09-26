@@ -8,11 +8,13 @@ description: Build Prusa Buddy firmware for one or more printer presets (mini, m
 ## 1. Prerequisites (one time)
 
 ```bash
-python3.12 -m pip install --user requests   # bootstrap.py downloads with requests
+sudo apt-get install -y python3-requests    # bootstrap.py downloads with requests
 python3.12 utils/bootstrap.py               # -> .dependencies/ (toolchain, cmake, ninja, clang-format 16, bootloaders) + .venv/
 ```
 
+- **`requests`:** Ubuntu 24.04 blocks `pip install --user` into the system Python (PEP 668), so install `requests` from apt or run bootstrap from a venv that has it.
 - **Python version:** use Python ≥ 3.12 so the `.venv` it creates can also run `utils/build_tests.py`.
+- **Claude Code on the web:** `.claude/hooks/session-start.sh` has already installed everything reachable, and its session-start message lists what is missing. Don't rerun `bootstrap.py`, and pass `--skip-bootstrap` to `build.py`. Without it, `build.py` reruns `bootstrap()`, which stops at the first blocked download and installs git hooks.
 - **Hosts it downloads from:** github.com, developer.arm.com (the ARM GCC 13.3.1 tarball), `prusa-buddy-firmware-dependencies.s3.eu-central-1.amazonaws.com`, and PyPI.
 - **If a host is blocked** (proxy 403), report which host and stop. Do **not** substitute a distro `arm-none-eabi-gcc`. Ubuntu 24.04's 13.2 build fails on `PRId64` in `src/common/metric_handlers.cpp` with its newlib-nano, and code size differs too. Only the pinned toolchain is supported.
 - **When it's done:** `.dependencies/gcc-arm-none-eabi-13.3.1/` exists, and `build.py` re-execs itself inside `.venv` automatically.
