@@ -32,11 +32,12 @@ if ! command -v msgfmt >/dev/null; then
     apt_install gettext
 fi
 
-# utils/build_tests.py uses PEP 701 f-strings, so Python 3.11 is not enough.
-is_py312() { "$1" -c 'import sys; sys.exit(sys.version_info < (3, 12))' 2>/dev/null; }
+# Exactly 3.12: utils/build_tests.py uses PEP 701 f-strings (3.11 is too old),
+# and requirements.txt pins numpy==1.26.4, which has no wheels for 3.13+.
+is_py312() { "$1" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12))' 2>/dev/null; }
 
 PYTHON=""
-for candidate in python3.12 python3.13 python3; do
+for candidate in python3.12 python3; do
     if command -v "$candidate" >/dev/null && is_py312 "$candidate"; then
         PYTHON="$candidate"
         break
