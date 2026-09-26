@@ -16,7 +16,7 @@ Firmware for the Original Prusa 32-bit printers: MINI/MINI+, MK3.5(S), MK3.9(S),
 ### Unit tests (host GCC, no ARM toolchain needed)
 
 `build_tests.py` gotchas:
-- It needs **Python ≥ 3.12**, because it uses PEP 701 f-strings. Under 3.11 it fails with `SyntaxError`.
+- It needs **Python 3.12**. It uses PEP 701 f-strings, so 3.11 fails with `SyntaxError`, and `requirements.txt` pins `numpy==1.26.4`, which has no wheels for 3.13 or newer.
 - It imports `tree_sitter` / `tree_sitter_cpp` at the top of the script.
 - Code generators need the packages in `requirements.txt`: `nunavut` (for `nnvg`), `polib`, `pyyaml`, `pillow`, `cbor2`, `ndeflib`, `simple_parsing`.
 - The translator tests need gettext's `msgfmt`.
@@ -41,7 +41,7 @@ ctest --test-dir build/tests -LE slow --output-on-failure
 - clang-format 16
 - prebuilt bootloaders, MMU firmware, the mini404 simulator
 
-It also creates `.venv/` from `requirements.txt` and installs the prek git hooks. Run it with Python ≥ 3.12 and with `requests` installed.
+It also creates `.venv/` from `requirements.txt` and installs the prek git hooks. Run it with Python 3.12 and with `requests` installed.
 
 ```bash
 python3 utils/build.py --preset mk4 --build-type debug --bootloader no     # -> build/mk4_debug_noboot/
