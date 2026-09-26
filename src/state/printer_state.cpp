@@ -788,6 +788,32 @@ ErrCode warning_type_to_error_code(WarningType wtype) {
     case WarningType::ToolOffsetCalibrationFailed:
         return ErrCode::ERR_MECHANICAL_TOOL_OFFSET_CALIBRATION_FAILED;
 
+    #if HAS_INDX()
+    case WarningType::ToolOffsetToolNotPicked:
+        return ErrCode::ERR_MECHANICAL_TOOL_OFFSET_TOOL_NOT_PICKED;
+
+    case WarningType::ToolOffsetNozzleCleaningFailed:
+        return ErrCode::ERR_MECHANICAL_TOOL_OFFSET_NOZZLE_CLEANING_FAILED;
+
+    case WarningType::ToolOffsetBedProbeFailed:
+        return ErrCode::ERR_MECHANICAL_TOOL_OFFSET_BED_PROBE_FAILED;
+
+    case WarningType::ToolOffsetSensorProbeFailed:
+        return ErrCode::ERR_MECHANICAL_TOOL_OFFSET_SENSOR_PROBE_FAILED;
+
+    case WarningType::ToolOffsetSensorNoData:
+        return ErrCode::ERR_MECHANICAL_TOOL_OFFSET_SENSOR_NO_DATA;
+
+    case WarningType::ToolOffsetHeadReset:
+        return ErrCode::ERR_MECHANICAL_TOOL_OFFSET_HEAD_RESET;
+
+    case WarningType::ToolOffsetNozzleTooHot:
+        return ErrCode::ERR_MECHANICAL_TOOL_OFFSET_NOZZLE_TOO_HOT;
+
+    case WarningType::ToolOffsetHomingFailed:
+        return ErrCode::ERR_MECHANICAL_TOOL_OFFSET_HOMING_FAILED;
+    #endif
+
     case WarningType::HotendOffsetUnsafeZDeviation:
         return ErrCode::ERR_MECHANICAL_TOOL_OFFSET_UNSAFE_Z_DEVIATION;
 

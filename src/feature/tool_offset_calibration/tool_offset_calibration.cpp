@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <bitset>
 #include <cmath>
+#include <expected>
 #include <optional>
 
 #include <Marlin/src/gcode/gcode.h>
@@ -170,6 +171,55 @@ float random_jitter(uint8_t r_param) {
     return (normalized * 2.0f - 1.0f) * r_param; // [-r_param, +r_param]
 }
 
+/// Why a calibration step outside the offset measurement itself failed
+enum class StepFailure {
+    tool_not_picked,
+    nozzle_cleaning_failed,
+    bed_probe_failed,
+};
+
+/// The warning to prompt with for a failed step.
+/// Only INDX printers tell the causes apart; elsewhere every failure reports the generic calibration failure.
+WarningType warning_for([[maybe_unused]] StepFailure failure) {
+#if HAS_INDX()
+    switch (failure) {
+    case StepFailure::tool_not_picked:
+        return WarningType::ToolOffsetToolNotPicked;
+    case StepFailure::nozzle_cleaning_failed:
+        return WarningType::ToolOffsetNozzleCleaningFailed;
+    case StepFailure::bed_probe_failed:
+        return WarningType::ToolOffsetBedProbeFailed;
+    }
+#endif
+    return WarningType::ToolOffsetCalibrationFailed;
+}
+
+/// The warning to prompt with for a failed offset measurement, see warning_for(StepFailure).
+WarningType warning_for([[maybe_unused]] tool_offset::MeasurementError error) {
+#if HAS_INDX()
+    using tool_offset::MeasurementError;
+    switch (error) {
+    case MeasurementError::nozzle_temp_unavailable:
+        // The INDX reads the temperature of the picked tool only
+        return WarningType::ToolOffsetToolNotPicked;
+    case MeasurementError::nozzle_too_hot:
+        return WarningType::ToolOffsetNozzleTooHot;
+    case MeasurementError::homing_failed:
+        return WarningType::ToolOffsetHomingFailed;
+    case MeasurementError::sensor_probe_failed:
+        return WarningType::ToolOffsetSensorProbeFailed;
+    case MeasurementError::sensor_no_data:
+        return WarningType::ToolOffsetSensorNoData;
+    case MeasurementError::head_reset:
+        return WarningType::ToolOffsetHeadReset;
+    case MeasurementError::nozzle_not_found:
+    case MeasurementError::sensor_not_detected:
+        break;
+    }
+#endif
+    return WarningType::ToolOffsetCalibrationFailed;
+}
+
 /// Probe Z at a given XY position, averaging multiple measurements.
 /// Returns NaN on failure.
 /// Asks for no tool corrections: the hotend offset and the nozzle length are what this
@@ -181,36 +231,37 @@ float probe_z_at(const xy_pos_t &pos, uint8_t probe_count) {
 /// Park at nozzle cleaner and run the cleaning sequence.
 /// In `Calibration` context the nozzle cleaner is not yet calibrated (chicken-and-egg) so the
 /// auto-clean sequence is skipped; the caller has already prompted the user to clean manually.
-/// @return true if cleaning succeeded, false on failure or abort
-bool prepare_tool(PhysicalToolIndex tool, [[maybe_unused]] tool_offset_calibration::Context context) {
+/// @return why the tool could not be prepared, on failure or abort
+std::expected<void, StepFailure> prepare_tool(PhysicalToolIndex tool, [[maybe_unused]] tool_offset_calibration::Context context) {
     // Guard against a silently failed toolchange — do not drive to a parked tool's brush
     const std::optional<PhysicalToolIndex> selected = PhysicalToolIndex::currently_selected_opt();
     if (!selected.has_value() || selected.value() != tool) {
         log_error(ToolOffsetCalib, "Tool %u is not the selected tool, cannot clean", tool.to_raw());
-        return false;
+        return std::unexpected(StepFailure::tool_not_picked);
     }
 #if !HAS_INDX()
     // Physical pick detection is only available on the dwarf toolchanger
     if (!prusa_toolchanger.getTool(tool).is_picked()) {
         log_error(ToolOffsetCalib, "Tool %u is not physically picked, cannot clean", tool.to_raw());
-        return false;
+        return std::unexpected(StepFailure::tool_not_picked);
     }
 #endif
 
     const ToolTemperatures temps = get_tool_temperatures(tool);
+    const auto cleaning_failed = std::unexpected(StepFailure::nozzle_cleaning_failed);
 
 #if HAS_NOZZLE_CLEANER()
     if (context == tool_offset_calibration::Context::Print) {
         mapi::park(mapi::get_parking_position(mapi::ParkPosition::nozzle_cleaner_approach));
 
         if (!nozzle_cleaner::load_and_execute(nozzle_cleaner::Sequence::eject_blob)) {
-            return false;
+            return cleaning_failed;
         }
 
         // Purge and clean at cleaning temperature
         set_temp_and_wait_reached(tool, temps.cleaning);
         if (!nozzle_cleaner::load_and_execute(nozzle_cleaner::Sequence::purge_clean)) {
-            return false;
+            return cleaning_failed;
         }
 
         // Cool down to probing temperature with print fan on to speed it up
@@ -224,7 +275,7 @@ bool prepare_tool(PhysicalToolIndex tool, [[maybe_unused]] tool_offset_calibrati
         // Deep clean at probing temperature
         thermalManager.wait_for_hotend(tool, { .no_wait_for_cooling = false });
         if (!nozzle_cleaner::load_and_execute(nozzle_cleaner::Sequence::deep_clean)) {
-            return false;
+            return cleaning_failed;
         }
 
         // park out of cleaner area
@@ -241,7 +292,7 @@ bool prepare_tool(PhysicalToolIndex tool, [[maybe_unused]] tool_offset_calibrati
     // for the Z probing that follows.
     if (nozzle_cleaner_lite::is_available()) {
         if (!nozzle_cleaner_lite::clean(nozzle_cleaner_lite::CleanType::probing_tool)) {
-            return false;
+            return cleaning_failed;
         }
     }
 
@@ -251,7 +302,7 @@ bool prepare_tool(PhysicalToolIndex tool, [[maybe_unused]] tool_offset_calibrati
 #else
     #error "Not defined behavior for this printer configuration"
 #endif
-    return true;
+    return {};
 }
 
 /// Park the head with low Z at the front so the user can inspect/clean the nozzle
@@ -280,14 +331,18 @@ Response prompt_retry(WarningType warning, tool_offset_calibration::Context cont
 
 /// Park the head with low Z at the front so the user can inspect/clean the nozzle
 /// and prompt with Retry/Abort.
-/// On retry performs nozzle cleaning
+/// On retry performs nozzle cleaning; if that fails, prompts again with its own warning.
 /// Returns: Response::Retry on a successful retry path, Response::Abort otherwise.
 Response prompt_retry_with_cleaning(PhysicalToolIndex tool, WarningType warning, tool_offset_calibration::Context context) {
     auto response = prompt_retry(warning, context);
 
-    while (response == Response::Retry && !prepare_tool(tool, context)) {
+    while (response == Response::Retry) {
+        const auto prepared = prepare_tool(tool, context);
+        if (prepared) {
+            break;
+        }
         log_error(ToolOffsetCalib, "Nozzle cleaning failed");
-        response = prompt_retry(warning, context);
+        response = prompt_retry(warning_for(prepared.error()), context);
     }
     return response;
 }
@@ -402,7 +457,7 @@ bool calibrate_xy_offset(PhysicalToolIndex tool, const tool_offset::ProbingConfi
             log_error(ToolOffsetCalib, "Measurement failed: %s", result.error().message);
         }
 
-        if (prompt_retry_with_cleaning(tool, WarningType::ToolOffsetCalibrationFailed, context) != Response::Retry) {
+        if (prompt_retry_with_cleaning(tool, warning_for(result.error().error), context) != Response::Retry) {
             // Restore the original offsets
             hotend_offset[tool].x = current_ho.x;
             hotend_offset[tool].y = current_ho.y;
@@ -631,8 +686,8 @@ bool run(uint8_t r_param, uint8_t probe_count, Context context, const ProgressCa
 
         bool need_pass_retry = false;
         // Helper: Prompt the user to Retry/Abort if any check fails. Returns true if the caller should retry the whole pass, false to continue.
-        auto handle_tool_failure = [&]() -> bool {
-            if (prompt_retry(WarningType::ToolOffsetCalibrationFailed, context) == Response::Retry) {
+        auto handle_tool_failure = [&](StepFailure failure) -> bool {
+            if (prompt_retry(warning_for(failure), context) == Response::Retry) {
                 need_pass_retry = true;
                 return true;
             }
@@ -694,9 +749,9 @@ bool run(uint8_t r_param, uint8_t probe_count, Context context, const ProgressCa
                 thermalManager.setTargetHotend(saved_temp, tool);
             });
 
-            if (!prepare_tool(tool, context)) {
+            if (const auto prepared = prepare_tool(tool, context); !prepared) {
                 log_error(ToolOffsetCalib, "Tool %u cleaning failed (step %u)", tool.to_raw(), step);
-                if (handle_tool_failure()) {
+                if (handle_tool_failure(prepared.error())) {
                     break;
                 }
                 abort_print_if_needed();
@@ -720,7 +775,7 @@ bool run(uint8_t r_param, uint8_t probe_count, Context context, const ProgressCa
                 const auto result_opt = probe_at(tool, step);
                 if (!result_opt) {
                     log_error(ToolOffsetCalib, "Z probe failed for tool %u (step %u)", tool.to_raw(), step);
-                    if (handle_tool_failure()) {
+                    if (handle_tool_failure(StepFailure::bed_probe_failed)) {
                         break;
                     }
                     abort_print_if_needed();
@@ -740,7 +795,7 @@ bool run(uint8_t r_param, uint8_t probe_count, Context context, const ProgressCa
                     const auto ref_last_opt = probe_at(tool, num_tools);
                     if (!ref_last_opt) {
                         log_error(ToolOffsetCalib, "Z probe failed at reference-line end for tool %u", tool.to_raw());
-                        if (handle_tool_failure()) {
+                        if (handle_tool_failure(StepFailure::bed_probe_failed)) {
                             break;
                         }
                         abort_print_if_needed();

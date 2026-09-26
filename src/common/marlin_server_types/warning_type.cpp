@@ -4,6 +4,7 @@
 
 #include <bitset>
 #include <option/has_mmu2.h>
+#include <option/has_indx.h>
 #include <option/has_tool_offset_sensor.h>
 #include <option/has_ceiling_clearance.h>
 #include <option/has_chamber_api.h>
@@ -98,6 +99,32 @@ constexpr PhasesWarning warning_type_phase_constexpr(WarningType warning) {
 #if HAS_TOOL_OFFSET_SENSOR()
     case WarningType::ToolOffsetCalibrationFailed:
         return PhasesWarning::ToolOffsetCalibrationFailed;
+
+    #if HAS_INDX()
+    case WarningType::ToolOffsetToolNotPicked:
+        return PhasesWarning::ToolOffsetToolNotPicked;
+
+    case WarningType::ToolOffsetNozzleCleaningFailed:
+        return PhasesWarning::ToolOffsetNozzleCleaningFailed;
+
+    case WarningType::ToolOffsetBedProbeFailed:
+        return PhasesWarning::ToolOffsetBedProbeFailed;
+
+    case WarningType::ToolOffsetSensorProbeFailed:
+        return PhasesWarning::ToolOffsetSensorProbeFailed;
+
+    case WarningType::ToolOffsetSensorNoData:
+        return PhasesWarning::ToolOffsetSensorNoData;
+
+    case WarningType::ToolOffsetHeadReset:
+        return PhasesWarning::ToolOffsetHeadReset;
+
+    case WarningType::ToolOffsetNozzleTooHot:
+        return PhasesWarning::ToolOffsetNozzleTooHot;
+
+    case WarningType::ToolOffsetHomingFailed:
+        return PhasesWarning::ToolOffsetHomingFailed;
+    #endif
 
     case WarningType::HotendOffsetUnsafeZDeviation:
         return PhasesWarning::HotendOffsetUnsafeZDeviation;
