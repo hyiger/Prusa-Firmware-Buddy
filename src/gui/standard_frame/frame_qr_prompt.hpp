@@ -48,6 +48,9 @@ protected:
     /// Positions all sub-windows inside the (already laid-out) inner_frame.
     void layout_contents();
 
+    /// Width of the column holding the info text and the link.
+    Rect16::Width_t text_column_width() const;
+
     window_frame_t inner_frame; // holds the text on the left and the QR code with ScanMe on the right
     window_text_t info;
     window_text_t scan_me;
@@ -57,4 +60,6 @@ protected:
     RadioButtonFSM radio;
 
     std::array<char, 48> link_buffer;
+
+    uint8_t link_rows = 1; ///< A help link too long for one row is wrapped onto two
 };
