@@ -3,8 +3,10 @@
 
 #include <M70X.hpp>
 #include <fs_autoload_autolock.hpp>
+#include <fs_event_autolock.hpp>
 
 #include <module/temperature.h>
+#include <Marlin.h>
 
 #include <common/cold_pull.hpp>
 #include <client_fsm_types.hpp>
@@ -14,6 +16,9 @@
 #include <mapi/cold_extrude.hpp>
 #include <utils/variant_utils.hpp>
 #include <mapi/motion.hpp>
+#include <feature/motor_current_profile/motor_current_profile.hpp>
+#include <feature/prusa/e-stall_detector.h>
+#include <raii/scope_guard.hpp>
 
 #include <option/has_auto_retract.h>
 #if HAS_AUTO_RETRACT()
@@ -44,6 +49,13 @@ namespace {
     // Slightly higher temperature less likely create big blobs, that cannot be manually pulled from the idler
     constexpr const uint16_t HOTEND_PULL_TEMP { 90 };
     constexpr const uint16_t HOTEND_END_TEMP { 95 };
+
+    #if HAS_INDX()
+    constexpr const uint16_t INDX_FLUSH_TEMP { 290 };
+    constexpr const uint16_t INDX_PACK_TARGET_TEMP { 180 };
+    constexpr const uint16_t INDX_COOL_TEMP { 60 };
+    constexpr const uint16_t INDX_PULL_TEMP { 80 };
+    #endif
 
     constexpr const millis_t TIMEOUT_DISABLED { 0 };
     constexpr const millis_t COOLING_TIMEOUT_MILLIS { 1000 * 60 * 15 };
@@ -121,6 +133,21 @@ namespace {
 
     PhasesColdPull pick_tool() {
         tool_change(selected_tool, tool_return_t::no_return, tool_change_lift_t::full_lift, 1);
+        #if HAS_INDX()
+        // A remembered auto-retract would cause the planner to reinterpret the
+        // deliberate cold-pull extrusion moves. This procedure establishes a
+        // new physical filament state, so invalidate the remembered value.
+        buddy::auto_retract().set_retracted_distance(selected_tool, std::nullopt);
+
+        // Put the selected tool somewhere comfortable to work on before asking
+        // the user to remove its PTFE tube. Positive Z moves the bed down. The
+        // Relative parking coordinate is clamped automatically to Z_MAX_POS.
+        mapi::home_if_needed_and_park(mapi::ParkingPosition {
+            .x = static_cast<float>(X_CENTER),
+            .y = static_cast<float>(Y_CENTER),
+            .z = mapi::ParkingPosition::Relative { .delta = 20.f },
+        });
+        #endif
         return PhasesColdPull::unload_ptfe;
     }
     #endif
@@ -179,10 +206,16 @@ namespace {
 
     PhasesColdPull unload_ptfe() {
         switch (wait_for_response(PhasesColdPull::unload_ptfe)) {
+    #if !HAS_INDX()
         case Response::Unload:
             return PhasesColdPull::blank_unload;
+    #endif
         case Response::Continue:
+    #if HAS_INDX()
+            return PhasesColdPull::prepare_filament;
+    #else
             return PhasesColdPull::load_ptfe;
+    #endif
         case Response::Abort:
             return PhasesColdPull::cleanup;
         default:
@@ -199,7 +232,9 @@ namespace {
             return PhasesColdPull::blank_load;
     #endif
         case Response::Continue:
-    #if HAS_AUTO_RETRACT()
+    #if HAS_INDX()
+            return PhasesColdPull::prepare_filament;
+    #elif HAS_AUTO_RETRACT()
             return PhasesColdPull::deretract;
     #else
             return PhasesColdPull::cool_down;
@@ -213,12 +248,16 @@ namespace {
 
     PhasesColdPull prepare_filament() {
         switch (wait_for_response(PhasesColdPull::prepare_filament)) {
+    #if !HAS_INDX()
         case Response::Unload:
             return PhasesColdPull::blank_unload;
         case Response::Load:
             return PhasesColdPull::blank_load;
+    #endif
         case Response::Continue:
-    #if HAS_AUTO_RETRACT()
+    #if HAS_INDX()
+            return PhasesColdPull::flush;
+    #elif HAS_AUTO_RETRACT()
             return PhasesColdPull::deretract;
     #else
             return PhasesColdPull::cool_down;
@@ -229,6 +268,57 @@ namespace {
             bsod_unreachable();
         }
     }
+
+    #if HAS_INDX()
+    bool heat_up(const uint16_t target_hotend_temp, PhasesColdPull current_phase);
+
+    bool delay_abortable(PhasesColdPull phase, millis_t duration) {
+        const millis_t deadline = millis() + duration;
+        auto waiting = [deadline]() { return PENDING(millis(), deadline); };
+        auto no_progress = [](millis_t) {};
+        return wait_while_with_progress(phase, duration, waiting, no_progress) != Response::Abort;
+    }
+
+    PhasesColdPull flush() {
+        if (!heat_up(INDX_FLUSH_TEMP, PhasesColdPull::flush)) {
+            return PhasesColdPull::cleanup;
+        }
+
+        BlockEStallDetection estall_blocker;
+        for (uint8_t i = 0; i < 3; ++i) {
+            mapi::extruder_move(20, 2);
+            planner.synchronize();
+            if (i != 2 && !delay_abortable(PhasesColdPull::flush, 2000)) {
+                return PhasesColdPull::cleanup;
+            }
+        }
+        return PhasesColdPull::tip_check;
+    }
+
+    PhasesColdPull tip_check() {
+        switch (wait_for_response(PhasesColdPull::tip_check)) {
+        case Response::Continue:
+            return PhasesColdPull::pack;
+        case Response::Abort:
+            return PhasesColdPull::cleanup;
+        default:
+            bsod_unreachable();
+        }
+    }
+
+    PhasesColdPull pack() {
+        thermalManager.setTargetHotend(INDX_PACK_TARGET_TEMP, selected_tool);
+        BlockEStallDetection estall_blocker;
+        for (uint8_t i = 0; i < 8; ++i) {
+            mapi::extruder_move(2, 1);
+            planner.synchronize();
+            if (i != 7 && !delay_abortable(PhasesColdPull::pack, 5000)) {
+                return PhasesColdPull::cleanup;
+            }
+        }
+        return PhasesColdPull::cool_down;
+    }
+    #endif
 
     PhasesColdPull blank_unload() {
         auto active_tool = stdext::get_optional<VirtualToolIndex>(VirtualToolIndex::currently_selected());
@@ -297,22 +387,36 @@ namespace {
         thermalManager.disable_hotend(); // cool down without target to avoid PID handling target temp
 
         // This is a legit use (is it?)
-        marlin_server::call_manually::set_temp_to_display(HOTEND_COLD_TEMP, *active_tool); // still show target temperature
+        constexpr uint16_t cold_temp = [] {
+    #if HAS_INDX()
+            return INDX_COOL_TEMP;
+    #else
+            return HOTEND_COLD_TEMP;
+    #endif
+        }();
+        marlin_server::call_manually::set_temp_to_display(cold_temp, *active_tool); // still show target temperature
 
-        auto too_hot = [active_tool]() {
-            return static_cast<uint16_t>(Temperature::degHotend(*active_tool)) > HOTEND_COLD_TEMP;
+        auto too_hot = [active_tool, cold_temp]() {
+            return Temperature::degHotend(*active_tool) > cold_temp;
         };
 
-        auto progress = [active_tool](const millis_t time_left) {
+        auto progress = [active_tool, cold_temp](const millis_t time_left) {
             cold_pull::TemperatureProgressData data { { 0 } };
             data.percent = static_cast<uint8_t>(
-                100.0f * HOTEND_COLD_TEMP / Temperature::degHotend(*active_tool));
+                100.0f * cold_temp / Temperature::degHotend(*active_tool));
             data.time_sec = time_left / 1000;
             marlin_server::fsm_change(PhasesColdPull::cool_down, data.fsm_data);
         };
 
         const auto fan_speed_stored = Temperature::print_fan_speed;
+        ScopeGuard restore_fan([fan_speed_stored]() {
+            thermalManager.set_print_fan_speed(fan_speed_stored);
+        });
+    #if HAS_INDX()
+        thermalManager.set_print_fan_speed(255);
+    #else
         thermalManager.set_print_fan_speed(240);
+    #endif
 
         switch (wait_while_with_progress(PhasesColdPull::cool_down, COOLING_TIMEOUT_MILLIS, too_hot, progress)) {
         case Response::Abort:
@@ -322,9 +426,46 @@ namespace {
         default:
             bsod_unreachable();
         }
-        thermalManager.set_print_fan_speed(fan_speed_stored);
+    #if HAS_INDX()
+        cold_pull::TemperatureProgressData complete { { 0 } };
+        complete.percent = 100;
+        marlin_server::fsm_change(PhasesColdPull::cool_down, complete.fsm_data);
+        marlin_server::call_manually::set_temp_to_display(0, *active_tool);
+        return PhasesColdPull::cooling_dwell;
+    #else
         return PhasesColdPull::heat_up;
+    #endif
     }
+
+    #if HAS_INDX()
+    PhasesColdPull cooling_dwell() {
+        constexpr millis_t dwell_duration = 120000;
+        const millis_t deadline = millis() + dwell_duration;
+
+        const auto fan_speed_stored = Temperature::print_fan_speed;
+        ScopeGuard restore_fan([fan_speed_stored]() {
+            thermalManager.set_print_fan_speed(fan_speed_stored);
+        });
+        thermalManager.set_print_fan_speed(255);
+
+        auto waiting = [deadline]() { return PENDING(millis(), deadline); };
+        auto progress = [](const millis_t time_left) {
+            cold_pull::TemperatureProgressData data { { 0 } };
+            data.percent = static_cast<uint8_t>(100 - std::min<millis_t>(100, time_left * 100 / dwell_duration));
+            data.time_sec = static_cast<uint16_t>((time_left + 999) / 1000);
+            marlin_server::fsm_change(PhasesColdPull::cooling_dwell, data.fsm_data);
+        };
+
+        switch (wait_while_with_progress(PhasesColdPull::cooling_dwell, dwell_duration, waiting, progress)) {
+        case Response::Abort:
+            return PhasesColdPull::cleanup;
+        case Response::_none:
+            return PhasesColdPull::heat_up;
+        default:
+            bsod_unreachable();
+        }
+    }
+    #endif
 
     bool heat_up(const uint16_t target_hotend_temp, PhasesColdPull current_phase) {
         auto active_tool = stdext::get_optional<PhysicalToolIndex>(PhysicalToolIndex::currently_selected());
@@ -383,14 +524,35 @@ namespace {
         const auto virtual_tool = std::get<VirtualToolIndex>(VirtualToolIndex::currently_selected());
         const auto physical_tool = virtual_tool.to_physical();
 
+    #if HAS_INDX()
+        thermalManager.setTargetHotend(INDX_PULL_TEMP, physical_tool);
+    #else
         thermalManager.setTargetHotend(HOTEND_END_TEMP, physical_tool);
+    #endif
 
         {
     #if ENABLED(PREVENT_COLD_EXTRUSION)
             mapi::ColdExtrudeGuard cold_extrude_guard;
     #endif
-            mapi::extruder_move(-std::min(300, EXTRUDE_MAXLENGTH), 50);
+    #if HAS_INDX()
+            const auto previous_profile = buddy::active_motor_current_profile();
+            ScopeGuard restore_current([previous_profile]() {
+                buddy::set_active_motor_current_profile(previous_profile);
+            });
+            buddy::set_active_motor_current_profile(buddy::StandardMotorCurrentProfile::increased_e);
+            BlockEStallDetection estall_blocker;
+            mapi::extruder_move(-40, 50);
             planner.synchronize();
+            mapi::extruder_move(-40, 20);
+    #else
+            mapi::extruder_move(-std::min(300, EXTRUDE_MAXLENGTH), 50);
+    #endif
+            planner.synchronize();
+
+    #if HAS_INDX()
+            // Let the user remove the pulled filament without releasing XYZ.
+            disable_e_steppers();
+    #endif
 
             // mark filament unloaded
             config_store().set_filament_type(virtual_tool, FilamentType::none);
@@ -447,18 +609,43 @@ namespace {
     #endif
         case PhasesColdPull::prepare_filament:
             return prepare_filament();
+    #if HAS_INDX()
+        case PhasesColdPull::flush:
+            return flush();
+        case PhasesColdPull::tip_check:
+            return tip_check();
+        case PhasesColdPull::pack:
+            return pack();
+        case PhasesColdPull::pull_ready:
+            switch (wait_for_response(PhasesColdPull::pull_ready)) {
+            case Response::Continue:
+                return PhasesColdPull::automatic_pull;
+            case Response::Abort:
+                return PhasesColdPull::cleanup;
+            default:
+                bsod_unreachable();
+            }
+    #endif
         case PhasesColdPull::blank_unload:
             return blank_unload();
         case PhasesColdPull::blank_load:
             return blank_load();
         case PhasesColdPull::cool_down:
             return cool_down();
+    #if HAS_INDX()
+        case PhasesColdPull::cooling_dwell:
+            return cooling_dwell();
+    #endif
     #if HAS_AUTO_RETRACT()
         case PhasesColdPull::deretract:
             return deretract();
     #endif
         case PhasesColdPull::heat_up:
+    #if HAS_INDX()
+            return heat_up(INDX_PULL_TEMP, PhasesColdPull::heat_up) ? PhasesColdPull::pull_ready : PhasesColdPull::cleanup;
+    #else
             return heat_up(HOTEND_PULL_TEMP, PhasesColdPull::heat_up) ? PhasesColdPull::automatic_pull : PhasesColdPull::cleanup;
+    #endif
         case PhasesColdPull::automatic_pull:
             return automatic_pull();
         case PhasesColdPull::manual_pull:
@@ -497,6 +684,9 @@ namespace {
 void M1702() {
     // Prevent filament autoload during whole ColdPull workflow.
     FS_AutoloadAutolock lock;
+    // Also suppress runout/autoload events. Unlike set_enabled_global(false),
+    // this is temporary and does not rewrite the user's persistent setting.
+    FS_EventAutolock event_lock;
 
     #if HAS_MMU2()
     was_mmu_enabled = MMU2::mmu2.Enabled();
