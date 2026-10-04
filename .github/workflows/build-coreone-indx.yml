@@ -1,0 +1,210 @@
+name: Build Core One INDX firmware
+
+# Custom unsigned firmware for the Core One INDX only. Flashing it requires a
+# printer whose appendix is broken; see the release notes.
+#
+# The firmware reports the version in version.txt with a prerelease tag
+# appended, for example 6.9.1-rd55, so that it cannot be mistaken for Prusa's
+# own build of that version. Pushing a tag named after the full version, such
+# as v6.9.1-rd55, builds it and publishes it as a release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: "Prerelease tag of the version, e.g. rd55 for 6.9.1-rd55"
+        type: string
+        default: "rd55"
+      create_release:
+        description: "Publish a GitHub release with the built .bbf files"
+        type: boolean
+        default: false
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          # The firmware build number is derived from the parent commit count,
+          # so a shallow clone silently produces build number 0.
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: version
+        env:
+          PRERELEASE_INPUT: ${{ inputs.prerelease }}
+        run: |
+          set -euo pipefail
+          base="$(tr -d '[:space:]' < version.txt)"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tag="${GITHUB_REF_NAME}"
+            prerelease="${tag#"v${base}-"}"
+            if [ "${prerelease}" = "${tag}" ]; then
+              echo "::error::Tag ${tag} does not name version ${base} with a prerelease tag, such as v${base}-rd55"
+              exit 1
+            fi
+          else
+            prerelease="${PRERELEASE_INPUT}"
+            tag="v${base}-${prerelease}"
+          fi
+          # A semver prerelease, of which the .bbf header stores five characters
+          identifier='(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
+          if ! [[ "${prerelease}" =~ ^${identifier}(\.${identifier})*$ ]] || [ "${#prerelease}" -gt 5 ]; then
+            echo "::error::Prerelease tag '${prerelease}' must be a semver prerelease of at most 5 characters"
+            exit 1
+          fi
+          # The same count CMake takes the build number from; the full version
+          # has to carry it.
+          build_number="$(git rev-list --count HEAD)"
+          {
+            echo "tag=${tag}"
+            echo "base=${base}"
+            echo "version=${base}-${prerelease}"
+            echo "suffix=-${prerelease}+${build_number}"
+            echo "suffix_short=-${prerelease}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Cache toolchain dependencies
+        uses: actions/cache@v4
+        with:
+          path: .dependencies
+          # The dependency manifest lives in bootstrap.py, so its hash is what
+          # should invalidate the cache.
+          key: deps-${{ runner.os }}-${{ hashFiles('utils/bootstrap.py') }}
+
+      - name: Install build prerequisites
+        # requests: bootstrap.py downloads the toolchain before it creates the
+        #   project venv, so it has to be present up front (see README).
+        # gettext: the resource step shells out to msgfmt to compile the
+        #   translation catalogs. Undocumented, and absent on a clean runner.
+        run: |
+          python3 -m pip install requests
+          sudo apt-get update
+          sudo apt-get install -y gettext
+
+      - name: Bootstrap
+        run: python3 utils/bootstrap.py
+
+      - name: Build
+        # --bootloader yes builds only the image linked to run alongside the
+        # bootloader (FLASH_ORIGIN 0x08020200). The 'no' variant links to
+        # 0x08000000 for direct SWD flashing and is not usable via the
+        # printer's own update path, so it is not built or published.
+        # The suffixes start with '-', so they are joined to their options
+        # with '=' to keep them from being parsed as options themselves.
+        env:
+          SUFFIX: ${{ steps.version.outputs.suffix }}
+          SUFFIX_SHORT: ${{ steps.version.outputs.suffix_short }}
+        run: >-
+          python3 utils/build.py --preset coreone_indx --build-type release --bootloader yes
+          "--version-suffix=${SUFFIX}" "--version-suffix-short=${SUFFIX_SHORT}"
+
+      - name: Collect artifacts
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          products=(build/products/coreone_indx_release_boot_*.bbf)
+          if [ "${#products[@]}" -ne 1 ] || [ ! -f "${products[0]}" ]; then
+            echo "::error::Expected one image in build/products, found: ${products[*]}"
+            exit 1
+          fi
+          mkdir -p dist
+          # Named after the version the printer shows; the product name also
+          # carries the build type and the build number.
+          cp "${products[0]}" "dist/coreone_indx_${VERSION}.bbf"
+          cd dist
+          ls -l
+          sha256sum -- *.bbf | tee SHA256SUMS
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coreone-indx-firmware-${{ steps.version.outputs.version }}
+          path: dist/
+          if-no-files-found: error
+
+      - name: Publish release
+        if: github.ref_type == 'tag' || inputs.create_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          BASE_VERSION: ${{ steps.version.outputs.base }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # A manual run tags the built commit, so it must not publish under a
+          # tag that already names another one.
+          if tagged="$(git rev-parse -q --verify "refs/tags/${TAG}^{commit}")" && [ "${tagged}" != "${GITHUB_SHA}" ]; then
+            echo "::error::Tag ${TAG} already points at ${tagged}; build under another prerelease tag"
+            exit 1
+          fi
+          # envsubst takes the names of the variables it substitutes, unexpanded
+          # shellcheck disable=SC2016
+          envsubst '${BASE_VERSION} ${VERSION} ${GITHUB_SHA}' > notes.md <<'EOF'
+          Unsigned custom firmware for the **Prusa Core One INDX only**, built from `${GITHUB_SHA}`.
+
+          It is Prusa's official [${BASE_VERSION}](https://github.com/prusa3d/Prusa-Firmware-Buddy/releases/tag/v${BASE_VERSION}) with a higher ringdown decay threshold for detecting that no tool is in the print head. The printer reports its version as `${VERSION}`, so it can be told apart from Prusa's build. It does not include the changes in this fork's earlier 6.9.1 and 6.9.1-hy.1 releases.
+
+          ### Change
+
+          The print head tells whether a tool is in it from the ringdown decay of its induction coil. Sensor Info shows the value, multiplied by 1000, as Ringdown Decay. This build reports no tool for any reading under 55, where stock firmware stops at 40:
+
+          | Ringdown Decay | Stock ${BASE_VERSION} | This build |
+          |---|---|---|
+          | Under 40 | No tool | No tool |
+          | 40 to 54 | Unknown | No tool |
+          | 55 to 84 | Unknown | Unknown |
+          | 85 and up | Tool present | Tool present |
+
+          Unknown readings are ignored, so in stock firmware a head that reads 40 to 54 with no tool never reports the tool as gone. A reading of 0 means the measurement failed, and still counts as unknown.
+
+          The heater only runs on a reading of 85 or more, the same as in stock firmware.
+
+          ### Trade-off
+
+          A tool stuck partway in the head that reads 40 to 54 now also counts as no tool. The printer can then accept a park that did not fully release the tool, and a reading that stays under 55 during a print stops the print as a lost tool.
+
+          Before relying on this build, note the Ringdown Decay with the head empty, with a tool partly inserted, and with a tool seated, both cold and at print temperature. The build suits a head that reads under 55 empty, 55 or more partly inserted, and 85 or more seated. Check the head after any failed or unusual tool change.
+
+          ### Flashing
+
+          Requires a printer with the appendix broken, as the build is unsigned.
+
+          Flash `coreone_indx_${VERSION}.bbf` from a USB drive, the same way as a stock firmware update.
+
+          Do not flash this on a non-INDX Core One. Both variants report `PRINTER_TYPE 7` and share a bootloader, so nothing will stop you.
+          EOF
+          # Upsert, so re-running against an existing tag refreshes the
+          # release instead of failing on an already-created one.
+          title="Core One INDX ${VERSION} (unsigned)"
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" dist/*.bbf dist/SHA256SUMS --clobber
+            gh release edit "${TAG}" \
+              --title "${title}" \
+              --notes-file notes.md \
+              --prerelease
+          else
+            gh release create "${TAG}" dist/*.bbf dist/SHA256SUMS \
+              --target "${GITHUB_SHA}" \
+              --title "${title}" \
+              --notes-file notes.md \
+              --prerelease
+          fi
