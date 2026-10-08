@@ -161,9 +161,9 @@ jobs:
           envsubst '${BASE_VERSION} ${VERSION} ${GITHUB_SHA}' > notes.md <<'EOF'
           Unsigned custom firmware for the **Prusa Core One INDX only**, built from `${GITHUB_SHA}`.
 
-          It is Prusa's official [${BASE_VERSION}](https://github.com/prusa3d/Prusa-Firmware-Buddy/releases/tag/v${BASE_VERSION}) with more specific error screens for a failed tool offset calibration. The printer reports its version as `${VERSION}`, so it can be told apart from Prusa's build.
+          It is Prusa's official [${BASE_VERSION}](https://github.com/prusa3d/Prusa-Firmware-Buddy/releases/tag/v${BASE_VERSION}) with more specific error screens for a failed tool offset calibration, and the XY homing motor current of 6.9.0. The printer reports its version as `${VERSION}`, so it can be told apart from Prusa's build.
 
-          ### Change
+          ### Tool offset calibration errors
 
           Stock firmware shows 36130, "Tool offset calibration failed", whichever way the calibration fails, and always asks to clean the nozzle and the sensor. This build shows a screen for each cause:
 
@@ -180,6 +180,10 @@ jobs:
           | 36197 | Homing failed |
 
           36130 keeps its link to Prusa's article. The QR codes on the others open their section of https://hyiger.github.io/coreone-indx-kb/codes/.
+
+          ### XY homing current
+
+          After homing X and Y, the printer refines the home position with diagonal moves: it turns one motor at a time, with the other held still, until the head stalls against the frame. Stock 6.9.1 runs the moving motor at 550 mA, down from 650 mA in 6.9.0. At 550 mA the motor can stall before the head reaches the frame, so homing takes the endstop as hit early. This build runs it at 650 mA again. The current of the motor held still, the stall sensitivity and the speed of the moves are unchanged.
 
           ### Flashing
 
