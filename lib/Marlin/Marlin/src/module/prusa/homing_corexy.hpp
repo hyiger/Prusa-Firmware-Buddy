@@ -29,8 +29,7 @@ bool corexy_home_refine(const float fr_mm_s, CoreXYCalibrationMode mode);
 
 /**
  * @brief Return the calibration status of the home origin
- * @return true if already calibrated; false also when the TMC sensitivity the origin
- *         was measured with is not calibrated (see corexy_sens_is_calibrated())
+ * @return true if already calibrated
  */
 bool corexy_home_is_calibrated();
 
@@ -53,8 +52,17 @@ bool corexy_sens_calibrate(const float fr_mm_s);
 
 /**
  * @brief Return the TMC sensitivity calibration status
- * @return true if calibrated with the measurement current and feedrate this firmware uses;
- *         a calibration saved with others is stale, as the sensitivity depends on both
+ * @return true if already calibrated
  */
 bool corexy_sens_is_calibrated();
+
+/**
+ * @brief Return whether the TMC sensitivity was calibrated with the configured measurement
+ *        current and feedrate
+ *
+ * The sensitivity depends on both, and homing measures with the saved ones, so a calibration
+ * saved with others keeps homing at the old current until it is redone.
+ * @return false also when not calibrated at all
+ */
+bool corexy_sens_matches_config();
 #endif

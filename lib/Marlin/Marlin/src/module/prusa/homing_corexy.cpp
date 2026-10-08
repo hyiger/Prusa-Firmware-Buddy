@@ -1184,6 +1184,11 @@ bool corexy_sens_calibrate(const float fr_mm_s) {
 
 bool corexy_sens_is_calibrated() {
     const CoreXYHomeTMCSens calibrated_sens = config_store().corexy_home_tmc_sens.get();
+    return !calibrated_sens.uninitialized();
+}
+
+bool corexy_sens_matches_config() {
+    const CoreXYHomeTMCSens calibrated_sens = config_store().corexy_home_tmc_sens.get();
     if (calibrated_sens.uninitialized()) {
         return false;
     }
@@ -1372,12 +1377,6 @@ bool corexy_home_refine(float fr_mm_s, CoreXYCalibrationMode mode) {
 }
 
 bool corexy_home_is_calibrated() {
-#if HAS_TRINAMIC && defined(XY_HOMING_MEASURE_SENS_MIN)
-    // The origin is measured with the calibrated sensitivity, so it is only as valid as that
-    if (!corexy_sens_is_calibrated()) {
-        return false;
-    }
-#endif
     const CoreXYGridOrigin calibrated_origin = config_store().corexy_grid_origin.get();
     return !calibrated_origin.uninitialized();
 }

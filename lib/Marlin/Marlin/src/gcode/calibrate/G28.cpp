@@ -1049,6 +1049,19 @@ RefineResult corexy_refine_during_G28_once(float fr_mm_s, const G28Flags &flags)
     return corexy_calibrate_homing_during_G28(fr_mm_s, flags);
   }
 
+#if HAS_TRINAMIC && defined(XY_HOMING_MEASURE_SENS_MIN)
+  // A sensitivity calibrated with another current or feedrate still homes, just with those.
+  // Replace it whenever we may calibrate. A homing that may not, or a user who declined
+  // recalibrations for good, keeps refining with it rather than not refining at all.
+  bool recalibrate_sens = flags.can_calibrate && !corexy_sens_matches_config();
+  #if HAS_SWITCHABLE_HOMING_CALIBRATION()
+  recalibrate_sens = recalibrate_sens && config_store().auto_recalibrate_precise_homing.get() != Tristate::no;
+  #endif
+  if (recalibrate_sens) {
+    return corexy_calibrate_homing_during_G28(fr_mm_s, flags);
+  }
+#endif
+
   // Retry the refinement a few times
   for (uint8_t retry = 0; retry < PRECISE_HOMING_COREXY_RETRIES; retry++) {
     if (planner.draining()) {
