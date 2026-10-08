@@ -183,7 +183,9 @@ jobs:
 
           ### XY homing current
 
-          After homing X and Y, the printer refines the home position with diagonal moves: it turns one motor at a time, with the other held still, until the head stalls against the frame. Stock 6.9.1 runs the moving motor at 550 mA, down from 650 mA in 6.9.0. At 550 mA the motor can stall before the head reaches the frame, so homing takes the endstop as hit early. This build runs it at 650 mA again. The current of the motor held still, the stall sensitivity and the speed of the moves are unchanged.
+          After homing X and Y, the printer refines the home position with diagonal moves: it turns one motor at a time, with the other held still, until the head stalls against the frame. Stock 6.9.1 runs the moving motor at 550 mA, down from 650 mA in 6.9.0. At 550 mA the motor can stall before the head reaches the frame, so homing takes the endstop as hit early. This build runs it at 650 mA again. The current of the motor held still, the stall sensitivity range and the speed of the moves are unchanged.
+
+          The printer saves the stall sensitivity it calibrated, together with the current it calibrated it at, and homes with those. If the saved calibration was made at another current, such as the 550 mA of stock 6.9.1, the first homing after flashing redoes the homing calibration once, usually at the start of the next print. The screen shows "Recalibrating home. This may take some time." while it runs.
 
           ### Flashing
 
