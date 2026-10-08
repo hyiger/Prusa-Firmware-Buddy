@@ -1186,6 +1186,18 @@ bool corexy_sens_is_calibrated() {
     const CoreXYHomeTMCSens calibrated_sens = config_store().corexy_home_tmc_sens.get();
     return !calibrated_sens.uninitialized();
 }
+
+bool corexy_sens_matches_config() {
+    const CoreXYHomeTMCSens calibrated_sens = config_store().corexy_home_tmc_sens.get();
+    if (calibrated_sens.uninitialized()) {
+        return false;
+    }
+
+    // A sensitivity only holds for the current and feedrate it was found with
+    const AxisEnum measured_axis = (X_HOME_DIR == Y_HOME_DIR ? B_AXIS : A_AXIS);
+    const measure_axis_params defaults = measure_axis_defaults(measured_axis);
+    return calibrated_sens.current == defaults.current && calibrated_sens.feedrate == defaults.feedrate;
+}
 #endif
 
 /// Refine home origin precisely on core-XY.
