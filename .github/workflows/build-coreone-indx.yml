@@ -161,7 +161,7 @@ jobs:
           envsubst '${BASE_VERSION} ${VERSION} ${GITHUB_SHA}' > notes.md <<'EOF'
           Unsigned custom firmware for the **Prusa Core One INDX only**, built from `${GITHUB_SHA}`.
 
-          It is Prusa's official [${BASE_VERSION}](https://github.com/prusa3d/Prusa-Firmware-Buddy/releases/tag/v${BASE_VERSION}) with more specific error screens for a failed tool offset calibration, and the XY homing motor current of 6.9.0. The printer reports its version as `${VERSION}`, so it can be told apart from Prusa's build.
+          It is Prusa's official [${BASE_VERSION}](https://github.com/prusa3d/Prusa-Firmware-Buddy/releases/tag/v${BASE_VERSION}) with more specific error screens for a failed tool offset calibration, and the XY homing motor current of 6.9.0. The printer shows its version as `${VERSION}`, so it can be told apart from Prusa's build. Prusa Connect is the exception, see below.
 
           ### Tool offset calibration errors
 
@@ -186,6 +186,12 @@ jobs:
           After homing X and Y, the printer refines the home position with diagonal moves: it turns one motor, with the other held still, until the head stalls against the frame. The homing calibration finds the stall sensitivity for these moves and saves it together with the motor current it used, and homing runs at the saved current. Stock 6.9.1 and 6.9.2 calibrate at 550 mA, down from 650 mA in 6.9.0, so a printer whose homing was calibrated on either homes at 550 mA. At that current the motor can stall before the head reaches the frame, and homing reports "Endstop early trigger". This build calibrates at 650 mA again. The current of the motor held still, the stall sensitivity range and the speed of the moves are unchanged.
 
           A printer whose saved calibration was made at another current recalibrates homing once, at the first homing that is allowed to, normally the one in the start G-code of the next print. The screen shows "Recalibrating home. This may take some time." while it runs. Homing before that, such as for the chamber vents, uses the saved calibration as before. A printer still on a calibration from 6.9.0 or earlier already homes at 650 mA, and nothing changes for it.
+
+          ### Prusa Connect
+
+          Prusa Connect turns off file transfer for a firmware version it does not recognize, such as one with a prerelease tag like `${VERSION}`. Uploads then fail with "The current printer firmware version do not support binary gcodes", and Connect marks the firmware as unsupported. This build reports `${BASE_VERSION}` to Connect, as a release build does, so Connect shows `${BASE_VERSION}` and uploads work. The printer's screens, PrusaLink and M115 still report `${VERSION}`.
+
+          Connect may offer a newer stock firmware as an update. Installing it replaces this build.
 
           ### Flashing
 
