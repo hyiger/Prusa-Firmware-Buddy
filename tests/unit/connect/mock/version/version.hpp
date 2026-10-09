@@ -2,6 +2,7 @@
 
 namespace version {
 
+constexpr const char project_version[] = "1.0.0";
 constexpr const char project_version_full[] = "1.0.0";
 
 } // namespace version
