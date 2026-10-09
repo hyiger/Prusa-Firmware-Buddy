@@ -216,7 +216,10 @@ optional<Error> HttpClient::send_request(const char *host, Connection *conn, Req
     CHECKED(buffer.header("Host", host, nullopt));
     CHECKED(buffer.header("Connection", request.connection(), nullopt));
     CHECKED(buffer.header("User-Agent-Printer", PrinterModelInfo::current().id_str, std::nullopt));
-    CHECKED(buffer.header("User-Agent-Version", version::project_version_full, std::nullopt));
+    // Connect turns off file transfer for a firmware version it does not recognize, such as
+    // one with this fork's prerelease tag, so this is the plain version like a release build
+
+    CHECKED(buffer.header("User-Agent-Version", version::project_version, std::nullopt));
     if (has_body(method)) {
         CHECKED(buffer.header("Transfer-Encoding", "chunked", nullopt));
         CHECKED(buffer.header("Content-Type", to_str(request.content_type()), nullopt));

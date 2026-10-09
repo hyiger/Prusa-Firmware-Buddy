@@ -26,7 +26,9 @@ Printer::Config load_eeprom_config() {
 }
 
 void init_info(Printer::PrinterInfo &info) {
-    info.firmware_version = version::project_version_full;
+    // Connect turns off file transfer for a firmware version it does not recognize, such as
+    // one with this fork's prerelease tag, so it gets the plain version like a release build
+    info.firmware_version = version::project_version;
     info.appendix = appendix_exist();
     if (otp_get_serial_nr(info.serial_number) == 0) {
         bsod("otp_get_serial_nr");
