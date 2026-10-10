@@ -235,6 +235,27 @@ void FilamentSpool::set_for_tool(VirtualToolIndex tool, FilamentSpool spool) {
     config_store().loaded_filament_spool.set(tool.to_raw(), spool);
 }
 
+std::optional<Color> color_from_hex(std::string_view hex) {
+    if (!hex.empty() && hex.front() == '#') {
+        hex.remove_prefix(1);
+    }
+    if (hex.size() != 6) {
+        return std::nullopt;
+    }
+
+    uint32_t value = 0;
+    for (const char ch : hex) {
+        const int digit = isdigit(static_cast<unsigned char>(ch)) ? ch - '0'
+            : isxdigit(static_cast<unsigned char>(ch))            ? tolower(ch) - 'a' + 10
+                                                                  : -1;
+        if (digit < 0) {
+            return std::nullopt;
+        }
+        value = (value << 4) | digit;
+    }
+    return Color::from_raw(value);
+}
+
 ColorHexString color_to_hex(Color color) {
     ColorHexString result;
     snprintf(result.data(), result.size(), "#%02X%02X%02X", color.r, color.g, color.b);

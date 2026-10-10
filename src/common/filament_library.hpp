@@ -213,3 +213,6 @@ static_assert(sizeof(UserFilamentColor_EEPROM) == 19);
 using ColorHexString = std::array<char, 8>;
 
 ColorHexString color_to_hex(Color color);
+
+/// Parses "#RRGGBB" or "RRGGBB", in either case
+std::optional<Color> color_from_hex(std::string_view hex);

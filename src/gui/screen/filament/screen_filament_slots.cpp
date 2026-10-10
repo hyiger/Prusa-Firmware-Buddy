@@ -1,42 +1,17 @@
 #include "screen_filament_slots.hpp"
+#include "filament_swatch.hpp"
 
 #include <cstdio>
 
 #include <algorithm_extensions.hpp>
 #include <config_store/store_instance.hpp>
-#include <display.hpp>
-#include <display_helper.h>
 #include <filament.hpp>
-#include <fonts.hpp>
 #include <gui/ScreenHandler.hpp>
 #include <marlin_client.hpp>
 #include <multi_filament_change.hpp>
 #include <utils/string_builder.hpp>
 
 namespace {
-
-constexpr int16_t swatch_size = 14;
-constexpr int16_t swatch_spacing = 6;
-
-void draw_swatch(Rect16 rect, Color color_back, Color color) {
-    const Rect16 outer = Rect16::fromLTWH(rect.Left() + (rect.Width() - swatch_size) / 2, rect.Top() + (rect.Height() - swatch_size) / 2, swatch_size, swatch_size);
-    display::draw_rounded_rect(outer, color_back, COLOR_GRAY, GuiDefaults::MenuItemCornerRadius, MIC_ALL_CORNERS);
-
-    const Rect16 inner = Rect16::fromLTWH(outer.Left() + 1, outer.Top() + 1, swatch_size - 2, swatch_size - 2);
-    display::draw_rounded_rect(inner, COLOR_GRAY, color, GuiDefaults::MenuItemCornerRadius, MIC_ALL_CORNERS);
-}
-
-uint16_t swatch_and_text_width(const std::optional<Color> &swatch, const string_view_utf8 &text) {
-    return (swatch ? swatch_size + swatch_spacing : 0) + resource_font(GuiDefaults::FontMenuItems)->w * text.computeNumUtf8Chars();
-}
-
-void print_swatch_and_text(Rect16 rect, const std::optional<Color> &swatch, const string_view_utf8 &text, Color color_text, Color color_back) {
-    if (swatch) {
-        draw_swatch(Rect16::fromLTWH(rect.Left(), rect.Top(), swatch_size, rect.Height()), color_back, *swatch);
-        rect = Rect16::fromLTRB(rect.Left() + swatch_size + swatch_spacing, rect.Top(), rect.EndPoint().x, rect.EndPoint().y);
-    }
-    render_text_align(rect, text, GuiDefaults::FontMenuItems, color_back, color_text, {}, Align_t::RightCenter(), false);
-}
 
 string_view_utf8 copy_name(const FilamentLibraryName &name, MenuItemSelectMenu::ItemTextParams &params) {
     snprintf(params.buffer.data(), params.buffer.size(), "%s", name.data());
@@ -81,7 +56,7 @@ MI_SLOT::MI_SLOT(uint8_t tool)
         color_ = spool.color.color();
     }
 
-    extension_width = swatch_and_text_width(color_, string_view_utf8::MakeRAM(value_.data()));
+    extension_width = filament_swatch::width_with_text(color_, string_view_utf8::MakeRAM(value_.data()));
 }
 
 void MI_SLOT::click(IWindowMenu &) {
@@ -89,7 +64,7 @@ void MI_SLOT::click(IWindowMenu &) {
 }
 
 void MI_SLOT::printExtension(Rect16 extension_rect, Color color_text, Color color_back, [[maybe_unused]] ropfn raster_op) const {
-    print_swatch_and_text(extension_rect, color_, string_view_utf8::MakeRAM(value_.data()), color_text, color_back);
+    filament_swatch::print_with_text(extension_rect, color_, string_view_utf8::MakeRAM(value_.data()), color_text, color_back);
 }
 
 } // namespace screen_filament_slots
@@ -188,7 +163,7 @@ void MI_COLOR::set_tool(VirtualToolIndex tool) {
     name_ = color.name();
     color_ = color.color();
 
-    extension_width = swatch_and_text_width(color_, color_ ? string_view_utf8::MakeRAM(name_.data()) : _("None"));
+    extension_width = filament_swatch::width_with_text(color_, color_ ? string_view_utf8::MakeRAM(name_.data()) : _("None"));
     Invalidate();
 }
 
@@ -197,7 +172,7 @@ void MI_COLOR::click(IWindowMenu &) {
 }
 
 void MI_COLOR::printExtension(Rect16 extension_rect, Color color_text, Color color_back, [[maybe_unused]] ropfn raster_op) const {
-    print_swatch_and_text(extension_rect, color_, color_ ? string_view_utf8::MakeRAM(name_.data()) : _("None"), color_text, color_back);
+    filament_swatch::print_with_text(extension_rect, color_, color_ ? string_view_utf8::MakeRAM(name_.data()) : _("None"), color_text, color_back);
 }
 
 } // namespace screen_filament_slot
@@ -234,7 +209,7 @@ void MI_COLOR_OPTION::click(IWindowMenu &menu) {
 
 void MI_COLOR_OPTION::printIcon(Rect16 icon_rect, [[maybe_unused]] ropfn raster_op, Color color_back) const {
     if (swatch_) {
-        draw_swatch(icon_rect, color_back, *swatch_);
+        filament_swatch::draw(icon_rect, color_back, *swatch_);
     }
 }
 
