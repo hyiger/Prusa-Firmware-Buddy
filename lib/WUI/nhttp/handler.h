@@ -41,6 +41,11 @@
 #include "status_renderer.h"
 #include "transfer_renderer.h"
 
+#include <option/has_filament_slots.h>
+#if HAS_FILAMENT_SLOTS()
+    #include "tools_renderer.h"
+#endif
+
 #include <http/types.h>
 
 #include <optional>
@@ -148,6 +153,9 @@ namespace handler {
         SendJson<EmptyRenderer>,
         SendJson<TransferRenderer>,
         SendJson<StatusRenderer>,
+#if HAS_FILAMENT_SLOTS()
+        SendJson<ToolsRenderer>,
+#endif
         printer::GcodeUpload,
         printer::GCodePreview,
         printer::JobCommand,

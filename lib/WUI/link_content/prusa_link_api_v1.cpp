@@ -119,6 +119,11 @@ Selector::Accepted PrusaLinkApiV1::accept(const RequestParser &parser, handler::
     } else if (suffix == "info") {
         get_only(SendJson(EmptyRenderer(get_info), parser.can_keep_alive()), parser, out);
         return Accepted::Accepted;
+#if HAS_FILAMENT_SLOTS()
+    } else if (suffix == "tools") {
+        get_only(SendJson(ToolsRenderer(), parser.can_keep_alive()), parser, out);
+        return Accepted::Accepted;
+#endif
     } else if (auto job_suffix_opt = remove_prefix(suffix, "job/"); job_suffix_opt.has_value()) {
         auto job_suffix = *job_suffix_opt;
         auto id = get_job_id(job_suffix);
