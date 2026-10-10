@@ -6,6 +6,7 @@
 #include <utility>
 
 #include <filament_library.hpp>
+#include "filament_swatch.hpp"
 #include <filament_list.hpp>
 #include <gui/menu_item/menu_item_select_menu.hpp>
 #include <i_window_menu_item.hpp>
@@ -38,6 +39,8 @@ protected:
     void printExtension(Rect16 extension_rect, Color color_text, Color color_back, ropfn raster_op) const override;
 
 private:
+    filament_swatch::Arrow arrow() const;
+
     VirtualToolIndex tool_;
     VirtualToolIndex::DisplayNameParams label_params_;
     std::array<char, 32> value_;
@@ -127,6 +130,7 @@ public:
 
 private:
     VirtualToolIndex::DisplayNameParams title_params_;
+    std::array<char, 32> title_ {};
 };
 
 namespace screen_filament_slot_color {

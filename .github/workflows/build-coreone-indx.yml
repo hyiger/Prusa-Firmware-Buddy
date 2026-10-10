@@ -189,7 +189,7 @@ jobs:
 
           ### Filament slots
 
-          Filament > Filament slots lists the tools with the vendor, type and color of the filament in each. Pick a tool to set them, each from a list. Colors are picked from a palette with a swatch for each. Changing the type there changes the loaded filament type without loading anything, as `M865 L` does. The vendor and color are cleared when the filament is unloaded, and the print's tool mapping screen shows each tool's color.
+          Filament > Filament Slots lists the tools with the vendor, type and color of the filament in each. Pick a tool to set them, each from a list. Colors are picked from a palette with a swatch for each. Changing the type there changes the loaded filament type without loading anything, as `M865 L` does. The vendor and color are cleared when the filament is unloaded, and the print's tool mapping screen shows each tool's color.
 
           There are 16 preset vendors (Generic, Prusament, Polymaker, Bambu Lab, eSun, Elegoo, Sunlu, Overture, Hatchbox, Inland, 3D-Fuel, Fillamentum, Fiberlogy, Spectrum, Extrudr, colorFabb) and 16 preset colors (Red, Green, Blue, Cyan, Magenta, Yellow, Black, White, Orange, Brown, Gray, Purple, Pink, Silver, Natural, Gold), plus 8 user slots for each. Filament > Manage Filaments has Edit Vendors and Edit Colors to name the user slots and set the hex code of a user color, and Enable Vendors and Enable Colors to choose which entries the lists show.
 

@@ -1,6 +1,8 @@
 #include "screen_filament_slots.hpp"
 #include "filament_swatch.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <cstdio>
 
 #include <algorithm_extensions.hpp>
@@ -23,7 +25,7 @@ string_view_utf8 copy_name(const FilamentLibraryName &name, MenuItemSelectMenu::
 // MI_FILAMENT_SLOTS
 // =============================================================
 MI_FILAMENT_SLOTS::MI_FILAMENT_SLOTS()
-    : IWindowMenuItem(_("Filament slots"), nullptr, is_enabled_t::yes, is_hidden_t::no, expands_t::yes) {
+    : IWindowMenuItem(_("Filament Slots"), nullptr, is_enabled_t::yes, is_hidden_t::no, expands_t::yes) {
 }
 
 void MI_FILAMENT_SLOTS::click(IWindowMenu &) {
@@ -56,15 +58,19 @@ MI_SLOT::MI_SLOT(uint8_t tool)
         color_ = spool.color.color();
     }
 
-    extension_width = filament_swatch::width_with_text(color_, string_view_utf8::MakeRAM(value_.data()));
+    extension_width = filament_swatch::width_with_text(color_, string_view_utf8::MakeRAM(value_.data()), arrow());
+}
+
+filament_swatch::Arrow MI_SLOT::arrow() const {
+    return IsEnabled() ? filament_swatch::Arrow::yes : filament_swatch::Arrow::no;
 }
 
 void MI_SLOT::click(IWindowMenu &) {
     Screens::Access()->Open(ScreenFactory::ScreenWithArg<ScreenFilamentSlot>(tool_));
 }
 
-void MI_SLOT::printExtension(Rect16 extension_rect, Color color_text, Color color_back, [[maybe_unused]] ropfn raster_op) const {
-    filament_swatch::print_with_text(extension_rect, color_, string_view_utf8::MakeRAM(value_.data()), color_text, color_back);
+void MI_SLOT::printExtension(Rect16 extension_rect, Color color_text, Color color_back, ropfn raster_op) const {
+    filament_swatch::print_with_text(extension_rect, color_, string_view_utf8::MakeRAM(value_.data()), color_text, color_back, raster_op, arrow());
 }
 
 } // namespace screen_filament_slots
@@ -163,7 +169,7 @@ void MI_COLOR::set_tool(VirtualToolIndex tool) {
     name_ = color.name();
     color_ = color.color();
 
-    extension_width = filament_swatch::width_with_text(color_, color_ ? string_view_utf8::MakeRAM(name_.data()) : _("None"));
+    extension_width = filament_swatch::width_with_text(color_, color_ ? string_view_utf8::MakeRAM(name_.data()) : _("None"), filament_swatch::Arrow::yes);
     Invalidate();
 }
 
@@ -171,15 +177,22 @@ void MI_COLOR::click(IWindowMenu &) {
     Screens::Access()->Open(ScreenFactory::ScreenWithArg<ScreenFilamentSlotColor>(tool_));
 }
 
-void MI_COLOR::printExtension(Rect16 extension_rect, Color color_text, Color color_back, [[maybe_unused]] ropfn raster_op) const {
-    filament_swatch::print_with_text(extension_rect, color_, color_ ? string_view_utf8::MakeRAM(name_.data()) : _("None"), color_text, color_back);
+void MI_COLOR::printExtension(Rect16 extension_rect, Color color_text, Color color_back, ropfn raster_op) const {
+    filament_swatch::print_with_text(extension_rect, color_, color_ ? string_view_utf8::MakeRAM(name_.data()) : _("None"), color_text, color_back, raster_op, filament_swatch::Arrow::yes);
 }
 
 } // namespace screen_filament_slot
 
 ScreenFilamentSlot::ScreenFilamentSlot(VirtualToolIndex tool)
     : screen_filament_slot::ScreenFilamentSlot_(string_view_utf8::MakeNULLSTR()) {
-    header.SetText(tool.display_name(title_params_));
+    StringBuilder(title_).append_string_view(tool.display_name(title_params_));
+
+    // Screen titles are upper case. A translated name with non-ASCII letters is left as it is,
+    // rather than upper-casing only some of its letters.
+    if (std::ranges::all_of(std::string_view(title_.data()), [](char ch) { return static_cast<unsigned char>(ch) < 0x80; })) {
+        std::ranges::transform(title_, title_.begin(), [](char ch) { return static_cast<char>(toupper(ch)); });
+    }
+    header.SetText(string_view_utf8::MakeRAM(title_.data()));
 
     using namespace screen_filament_slot;
     Item<MI_VENDOR>().set_tool(tool);

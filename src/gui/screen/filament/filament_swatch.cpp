@@ -4,11 +4,15 @@
 #include <display_helper.h>
 #include <fonts.hpp>
 #include <guiconfig/GuiDefaults.hpp>
+#include <img_resources.hpp>
 
 namespace {
 
 constexpr int16_t size = 14;
 constexpr int16_t spacing = 6;
+
+/// Width of the arrow of menu items that open another screen
+constexpr int16_t arrow_width = 16;
 
 } // namespace
 
@@ -22,11 +26,18 @@ void draw(Rect16 rect, Color color_back, Color color) {
     display::draw_rounded_rect(inner, COLOR_GRAY, color, GuiDefaults::MenuItemCornerRadius, MIC_ALL_CORNERS);
 }
 
-uint16_t width_with_text(const std::optional<Color> &swatch, const string_view_utf8 &text) {
-    return (swatch ? size + spacing : 0) + resource_font(GuiDefaults::FontMenuItems)->w * text.computeNumUtf8Chars();
+uint16_t width_with_text(const std::optional<Color> &swatch, const string_view_utf8 &text, Arrow arrow) {
+    return (swatch ? size + spacing : 0)
+        + resource_font(GuiDefaults::FontMenuItems)->w * text.computeNumUtf8Chars()
+        + (arrow == Arrow::yes ? spacing + arrow_width : 0);
 }
 
-void print_with_text(Rect16 rect, const std::optional<Color> &swatch, const string_view_utf8 &text, Color color_text, Color color_back) {
+void print_with_text(Rect16 rect, const std::optional<Color> &swatch, const string_view_utf8 &text, Color color_text, Color color_back, ropfn raster_op, Arrow arrow) {
+    if (arrow == Arrow::yes) {
+        const Rect16 arrow_rect = Rect16::fromLTWH(rect.EndPoint().x - arrow_width, rect.Top(), arrow_width, rect.Height());
+        render_icon_align(arrow_rect, &img::arrow_right_10x16, color_back, icon_flags(Align_t::Center(), raster_op));
+        rect = Rect16::fromLTRB(rect.Left(), rect.Top(), arrow_rect.Left() - spacing, rect.EndPoint().y);
+    }
     if (swatch) {
         draw(Rect16::fromLTWH(rect.Left(), rect.Top(), size, rect.Height()), color_back, *swatch);
         rect = Rect16::fromLTRB(rect.Left() + size + spacing, rect.Top(), rect.EndPoint().x, rect.EndPoint().y);

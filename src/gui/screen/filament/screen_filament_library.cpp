@@ -162,8 +162,8 @@ void MI_COLOR_NAME::click(IWindowMenu &) {
     set_color(color_);
 }
 
-void MI_COLOR_NAME::printExtension(Rect16 extension_rect, Color color_text, Color color_back, [[maybe_unused]] ropfn raster_op) const {
-    filament_swatch::print_with_text(extension_rect, std::nullopt, string_view_utf8::MakeRAM(name_.data()), color_text, color_back);
+void MI_COLOR_NAME::printExtension(Rect16 extension_rect, Color color_text, Color color_back, ropfn raster_op) const {
+    filament_swatch::print_with_text(extension_rect, std::nullopt, string_view_utf8::MakeRAM(name_.data()), color_text, color_back, raster_op);
 }
 
 MI_COLOR_HEX::MI_COLOR_HEX()
@@ -196,8 +196,8 @@ void MI_COLOR_HEX::click(IWindowMenu &) {
     }
 }
 
-void MI_COLOR_HEX::printExtension(Rect16 extension_rect, Color color_text, Color color_back, [[maybe_unused]] ropfn raster_op) const {
-    filament_swatch::print_with_text(extension_rect, swatch_, string_view_utf8::MakeRAM(hex_.data()), color_text, color_back);
+void MI_COLOR_HEX::printExtension(Rect16 extension_rect, Color color_text, Color color_back, ropfn raster_op) const {
+    filament_swatch::print_with_text(extension_rect, swatch_, string_view_utf8::MakeRAM(hex_.data()), color_text, color_back, raster_op);
 }
 
 } // namespace screen_filament_library
