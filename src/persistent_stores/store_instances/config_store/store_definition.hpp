@@ -63,6 +63,10 @@
 #include <option/has_anfc.h>
 #include <option/has_gantry_squareness_check.h>
 #include <option/has_indx.h>
+#include <option/has_filament_slots.h>
+#if HAS_FILAMENT_SLOTS()
+    #include <filament_library.hpp>
+#endif
 #include <option/has_wastebin_fill_tracking.h>
 #include <option/has_side_fsensor.h>
 #include <option/has_side_fsensor_invertible.h>
@@ -523,6 +527,19 @@ struct CurrentStore
 #endif
 
     StoreItem<EncodedBitset<max_user_filament_type_count>, defaults::visible_user_filament_types, ItemFlag::user_presets, journal::hash("Visible User Filament Types")> visible_user_filament_types;
+
+#if HAS_FILAMENT_SLOTS()
+    /// Vendor and color of the filament loaded in each tool. Use FilamentSpool::for_tool.
+    /// Cleared when the filament is unloaded, so it never outlives the spool it describes.
+    StoreItemArray<FilamentSpool, FilamentSpool {}, ItemFlag::printer_state, journal::hash("Loaded Filament Spool"), 16, VirtualToolIndex::count> loaded_filament_spool;
+
+    StoreItemArray<FilamentLibraryName, defaults::user_filament_vendors, ItemFlag::user_presets, journal::hash("User Filament Vendors"), 16, user_filament_vendor_count> user_filament_vendors;
+    StoreItemArray<UserFilamentColor_EEPROM, defaults::user_filament_colors, ItemFlag::user_presets, journal::hash("User Filament Colors"), 16, user_filament_color_count> user_filament_colors;
+
+    /// Layout described by FilamentLibraryItem::user_visibility_bit_offset
+    StoreItem<EncodedBitset<32>, defaults::visible_filament_vendors, ItemFlag::user_presets, journal::hash("Visible Filament Vendors")> visible_filament_vendors;
+    StoreItem<EncodedBitset<32>, defaults::visible_filament_colors, ItemFlag::user_presets, journal::hash("Visible Filament Colors")> visible_filament_colors;
+#endif
 
     [[deprecated("Use the overload with VirtualToolIndex")]]
     FilamentType get_filament_type(uint8_t index);

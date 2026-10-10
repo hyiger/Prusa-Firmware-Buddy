@@ -840,6 +840,10 @@ endif()
 # COREONEL_INDX yet - untested there.
 set_feature_for_printers(HAS_GANTRY_SQUARENESS_CHECK "COREONE_INDX")
 
+# Per-tool filament vendor and color, picked from preset and user-defined vendor and color
+# libraries. Only on the printer it is tested on.
+set_feature_for_printers(HAS_FILAMENT_SLOTS "COREONE_INDX")
+
 if(HAS_TOOLCHANGER OR HAS_MMU2)
   define_boolean_option(HAS_TOOL_MAPPING yes)
   define_boolean_option(HAS_SPOOL_JOIN yes)
