@@ -259,6 +259,10 @@ void CurrentStore::set_filament_type(VirtualToolIndex virtual_tool, FilamentType
         loaded_filament_is_previous.apply([&](auto &item) {
             item.set(virtual_tool.to_raw(), true);
         });
+
+#if HAS_FILAMENT_SLOTS()
+        loaded_filament_spool.set(virtual_tool.to_raw(), FilamentSpool {});
+#endif
     } else {
         loaded_filament_type.set(virtual_tool.to_raw(), value);
         loaded_filament_is_previous.apply([&](auto &item) {

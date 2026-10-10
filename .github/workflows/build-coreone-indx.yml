@@ -161,7 +161,7 @@ jobs:
           envsubst '${BASE_VERSION} ${VERSION} ${GITHUB_SHA}' > notes.md <<'EOF'
           Unsigned custom firmware for the **Prusa Core One INDX only**, built from `${GITHUB_SHA}`.
 
-          It is Prusa's official [${BASE_VERSION}](https://github.com/prusa3d/Prusa-Firmware-Buddy/releases/tag/v${BASE_VERSION}) with more specific error screens for a failed tool offset calibration, and the XY homing motor current of 6.9.0. The printer shows its version as `${VERSION}`, so it can be told apart from Prusa's build. Prusa Connect is the exception, see below.
+          It is Prusa's official [${BASE_VERSION}](https://github.com/prusa3d/Prusa-Firmware-Buddy/releases/tag/v${BASE_VERSION}) with more specific error screens for a failed tool offset calibration, the XY homing motor current of 6.9.0, and filament slots that record the vendor and color of the filament in each tool. The printer shows its version as `${VERSION}`, so it can be told apart from Prusa's build. Prusa Connect is the exception, see below.
 
           ### Tool offset calibration errors
 
@@ -186,6 +186,14 @@ jobs:
           After homing X and Y, the printer refines the home position with diagonal moves: it turns one motor, with the other held still, until the head stalls against the frame. The homing calibration finds the stall sensitivity for these moves and saves it together with the motor current it used, and homing runs at the saved current. Stock 6.9.1 and 6.9.2 calibrate at 550 mA, down from 650 mA in 6.9.0, so a printer whose homing was calibrated on either homes at 550 mA. At that current the motor can stall before the head reaches the frame, and homing reports "Endstop early trigger". This build calibrates at 650 mA again. The current of the motor held still, the stall sensitivity range and the speed of the moves are unchanged.
 
           A printer whose saved calibration was made at another current recalibrates homing once, at the first homing that is allowed to, normally the one in the start G-code of the next print. The screen shows "Recalibrating home. This may take some time." while it runs. Homing before that, such as for the chamber vents, uses the saved calibration as before. A printer still on a calibration from 6.9.0 or earlier already homes at 650 mA, and nothing changes for it.
+
+          ### Filament slots
+
+          Filament > Filament Slots lists the tools with the vendor, type and color of the filament in each. Pick a tool to set them, each from a list. Colors are picked from a palette with a swatch for each. Changing the type there changes the loaded filament type without loading anything, as `M865 L` does. The vendor and color are cleared when the filament is unloaded, and the print's tool mapping screen shows each tool's color.
+
+          There are 16 preset vendors (Generic, Prusament, Polymaker, Bambu Lab, eSun, Elegoo, Sunlu, Overture, Hatchbox, Inland, 3D-Fuel, Fillamentum, Fiberlogy, Spectrum, Extrudr, colorFabb) and 16 preset colors (Red, Green, Blue, Cyan, Magenta, Yellow, Black, White, Orange, Brown, Gray, Purple, Pink, Silver, Natural, Gold), plus 8 user slots for each. Filament > Manage Filaments has Edit Vendors and Edit Colors to name the user slots and set the hex code of a user color, and Enable Vendors and Enable Colors to choose which entries the lists show.
+
+          PrusaLink reports the slots at `/api/v1/tools`, with the same credentials as its other requests, and `M866 T<tool> V"<vendor>" C"<color>"` sets them from G-code.
 
           ### Prusa Connect
 
