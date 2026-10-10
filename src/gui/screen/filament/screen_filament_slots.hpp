@@ -14,7 +14,6 @@
 #include <meta_utils.hpp>
 #include <screen_menu.hpp>
 #include <tool_index.hpp>
-#include <window_menu_virtual.hpp>
 #include <WindowMenuItems.hpp>
 
 /// Filament menu entry that opens ScreenFilamentSlots
@@ -102,7 +101,7 @@ private:
     FilamentList items_;
 };
 
-/// Shows the assigned color, opens ScreenFilamentSlotColor
+/// Shows the assigned color, opens the color palette
 class MI_COLOR final : public IWindowMenuItem {
 public:
     MI_COLOR();
@@ -131,51 +130,4 @@ public:
 private:
     VirtualToolIndex::DisplayNameParams title_params_;
     std::array<char, 32> title_ {};
-};
-
-namespace screen_filament_slot_color {
-
-/// Color with its swatch. Assigns the color to the menu's tool and closes the screen.
-class MI_COLOR_OPTION final : public IWindowMenuItem {
-public:
-    MI_COLOR_OPTION(FilamentColor color);
-
-protected:
-    void click(IWindowMenu &) override;
-    void printIcon(Rect16 icon_rect, ropfn raster_op, Color color_back) const override;
-
-private:
-    FilamentColor color_;
-    FilamentLibraryName name_;
-    std::optional<Color> swatch_;
-};
-
-class WindowMenuColors final : public WindowMenuVirtual {
-public:
-    WindowMenuColors(window_t *parent, Rect16 rect);
-
-    void set_tool(VirtualToolIndex tool);
-
-    VirtualToolIndex tool() const {
-        return tool_;
-    }
-
-    int item_count() const final;
-
-protected:
-    void setup_item(ItemVariant &variant, int index) final;
-
-private:
-    VirtualToolIndex tool_ = VirtualToolIndex::from_raw(0);
-
-    /// None, then the visible colors, plus the assigned one if it is hidden
-    stdext::inplace_vector<FilamentColor, FilamentColor::total_count + 1> items_;
-};
-
-} // namespace screen_filament_slot_color
-
-/// Color palette for one tool
-class ScreenFilamentSlotColor final : public ScreenMenuBase<screen_filament_slot_color::WindowMenuColors> {
-public:
-    ScreenFilamentSlotColor(VirtualToolIndex tool);
 };

@@ -10,6 +10,7 @@
 #include <utility>
 
 #include <color.hpp>
+#include <filament.hpp>
 #include <tool_index.hpp>
 #include <utils/string/inplace_string.hpp>
 
@@ -186,11 +187,23 @@ struct FilamentSpool {
     FilamentVendor vendor;
     FilamentColor color;
 
-    /// \returns vendor and color assigned to \p tool.
-    /// They are cleared whenever the filament is unloaded from the tool.
+    /// \returns vendor and color of the filament loaded in \p tool, none when the tool is empty
     static FilamentSpool for_tool(VirtualToolIndex tool);
 
+    /// \returns vendor and color last assigned to \p tool, kept after an unload.
+    /// They are cleared when filament is set on the empty tool, and replaced by what a load picked.
+    static FilamentSpool previous_for_tool(VirtualToolIndex tool);
+
     static void set_for_tool(VirtualToolIndex tool, FilamentSpool spool);
+
+    /// Remembers \p spool, picked in the GUI, for the coming load of \p type into \p tool.
+    /// Called from the GUI thread, before the load continues in the Marlin thread.
+    static void pick_for_load(VirtualToolIndex tool, FilamentType type, FilamentSpool spool);
+
+    /// Assigns the spool picked for loading \p type into \p tool, if one was, once that load succeeded.
+    /// Filament loaded without a pick, such as from G-code, ends up without a spool anyway, because
+    /// setting filament on an empty tool clears it. Purges without a load keep the spool.
+    static void finish_load(VirtualToolIndex tool, FilamentType type);
 
     constexpr bool operator==(const FilamentSpool &) const = default;
     constexpr bool operator!=(const FilamentSpool &) const = default;

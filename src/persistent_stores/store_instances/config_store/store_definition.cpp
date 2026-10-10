@@ -259,11 +259,15 @@ void CurrentStore::set_filament_type(VirtualToolIndex virtual_tool, FilamentType
         loaded_filament_is_previous.apply([&](auto &item) {
             item.set(virtual_tool.to_raw(), true);
         });
-
-#if HAS_FILAMENT_SLOTS()
-        loaded_filament_spool.set(virtual_tool.to_raw(), FilamentSpool {});
-#endif
     } else {
+#if HAS_FILAMENT_SLOTS()
+        // Filament set on an empty tool has no spool until a load assigns the one picked for it
+        const bool was_empty = loaded_filament_is_previous.get()[virtual_tool.to_raw()]
+            || loaded_filament_type.get(virtual_tool.to_raw()).decode() == FilamentType::none;
+        if (was_empty) {
+            loaded_filament_spool.set(virtual_tool.to_raw(), FilamentSpool {});
+        }
+#endif
         loaded_filament_type.set(virtual_tool.to_raw(), value);
         loaded_filament_is_previous.apply([&](auto &item) {
             item.set(virtual_tool.to_raw(), false);

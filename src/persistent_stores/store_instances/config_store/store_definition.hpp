@@ -529,8 +529,8 @@ struct CurrentStore
     StoreItem<EncodedBitset<max_user_filament_type_count>, defaults::visible_user_filament_types, ItemFlag::user_presets, journal::hash("Visible User Filament Types")> visible_user_filament_types;
 
 #if HAS_FILAMENT_SLOTS()
-    /// Vendor and color of the filament loaded in each tool. Use FilamentSpool::for_tool.
-    /// Cleared when the filament is unloaded, so it never outlives the spool it describes.
+    /// Vendor and color of the filament in each tool, kept after an unload as the previous spool.
+    /// Use FilamentSpool::for_tool and FilamentSpool::previous_for_tool.
     StoreItemArray<FilamentSpool, FilamentSpool {}, ItemFlag::printer_state, journal::hash("Loaded Filament Spool"), 16, VirtualToolIndex::count> loaded_filament_spool;
 
     StoreItemArray<FilamentLibraryName, defaults::user_filament_vendors, ItemFlag::user_presets, journal::hash("User Filament Vendors"), 16, user_filament_vendor_count> user_filament_vendors;

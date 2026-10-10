@@ -49,6 +49,10 @@ static_assert(HAS_PAUSE());
 #include <config_store/store_instance.hpp>
 #include <raii/scope_guard.hpp>
 #include <filament_to_load.hpp>
+#include <option/has_filament_slots.h>
+#if HAS_FILAMENT_SLOTS()
+    #include <filament_library.hpp>
+#endif
 #include <common/marlin_client.hpp>
 #include <common/mapi/parking.hpp>
 #include <feature/ramming/ramming_sequence.hpp>
@@ -779,6 +783,10 @@ void Pause::purge_process([[maybe_unused]] Response response) {
         config_store().set_filament_type(settings.virtual_tool(), old_filament);
         return;
     }
+
+#if HAS_FILAMENT_SLOTS()
+    FilamentSpool::finish_load(settings.virtual_tool(), filament::get_type_to_load());
+#endif
 
     if constexpr (option::has_human_interactions) {
         set(LoadState::color_correct_ask);

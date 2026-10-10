@@ -1,12 +1,15 @@
 #include "filament_library.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <strings.h>
 
 #include <config_store/store_instance.hpp>
+#include <encoded_filament.hpp>
+#include <filament_to_load.hpp>
 #include <i18n.h>
 #include <utils/enum_array.hpp>
 
@@ -223,7 +226,27 @@ static_assert(!FilamentVendor::from_data(FilamentVendor::user_data_offset + user
 static_assert(!FilamentSpool {}.vendor && !FilamentSpool {}.color);
 static_assert(FilamentVendor::all()[FilamentVendor::preset_count] == FilamentVendor::user(0));
 
+namespace {
+
+/// The spool picked in the GUI for the coming load, handed over to the Marlin thread
+struct PickedForLoad {
+    uint8_t tool = 0xff;
+    EncodedFilamentType type;
+    FilamentSpool spool;
+};
+static_assert(sizeof(PickedForLoad) == 4);
+std::atomic<PickedForLoad> picked_for_load;
+
+} // namespace
+
 FilamentSpool FilamentSpool::for_tool(VirtualToolIndex tool) {
+    if (FilamentType::for_tool(tool) == FilamentType::none) {
+        return {};
+    }
+    return previous_for_tool(tool);
+}
+
+FilamentSpool FilamentSpool::previous_for_tool(VirtualToolIndex tool) {
     const auto stored = config_store().loaded_filament_spool.get(tool.to_raw());
     return FilamentSpool {
         .vendor = FilamentVendor::from_data(stored.vendor.data),
@@ -233,6 +256,23 @@ FilamentSpool FilamentSpool::for_tool(VirtualToolIndex tool) {
 
 void FilamentSpool::set_for_tool(VirtualToolIndex tool, FilamentSpool spool) {
     config_store().loaded_filament_spool.set(tool.to_raw(), spool);
+}
+
+void FilamentSpool::pick_for_load(VirtualToolIndex tool, FilamentType type, FilamentSpool spool) {
+    picked_for_load = PickedForLoad { .tool = tool.to_raw(), .type = type, .spool = spool };
+}
+
+void FilamentSpool::finish_load(VirtualToolIndex tool, FilamentType type) {
+    const PickedForLoad picked = picked_for_load.exchange({});
+    if (picked.tool != tool.to_raw() || picked.type != EncodedFilamentType(type)) {
+        return;
+    }
+    set_for_tool(tool, picked.spool);
+
+    // Shows the picked color when asking whether the color is correct
+    if (const auto color = picked.spool.color.color(); color && !filament::get_color_to_load()) {
+        filament::set_color_to_load(color);
+    }
 }
 
 std::optional<Color> color_from_hex(std::string_view hex) {

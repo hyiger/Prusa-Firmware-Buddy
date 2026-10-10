@@ -7,6 +7,7 @@ target_sources(
 
 if(HAS_FILAMENT_SLOTS)
   target_sources(
-    firmware PRIVATE filament_swatch.cpp screen_filament_library.cpp screen_filament_slots.cpp
+    firmware PRIVATE filament_library_dialog.cpp filament_swatch.cpp screen_filament_library.cpp
+                     screen_filament_slots.cpp
     )
 endif()

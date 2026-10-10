@@ -15,7 +15,8 @@
  *
  * Sets the vendor and color of the filament loaded in a tool, as the Filament slots screen does,
  * then prints the tool's filament type, vendor and color.
- * The tool must have filament loaded. Vendor and color are cleared when it is unloaded.
+ * The tool must have filament loaded. An unload keeps them as the previous spool, which the next load
+ * from the menu offers first.
  *
  *#### Usage
  *

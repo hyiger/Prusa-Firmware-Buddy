@@ -1,4 +1,5 @@
 #include "screen_filament_slots.hpp"
+#include "filament_library_dialog.hpp"
 #include "filament_swatch.hpp"
 
 #include <algorithm>
@@ -173,8 +174,17 @@ void MI_COLOR::set_tool(VirtualToolIndex tool) {
     Invalidate();
 }
 
-void MI_COLOR::click(IWindowMenu &) {
-    Screens::Access()->Open(ScreenFactory::ScreenWithArg<ScreenFilamentSlotColor>(tool_));
+void MI_COLOR::click(IWindowMenu &menu) {
+    const auto prev_focus = menu.focused_item_index();
+    auto spool = FilamentSpool::for_tool(tool_);
+    if (const auto color = filament_library_dialog::pick_color(_("COLOR"), spool.color)) {
+        spool.color = *color;
+        FilamentSpool::set_for_tool(tool_, spool);
+        set_tool(tool_);
+    }
+
+    // Opening a dialog with a menu moves the focus of the current menu
+    menu.move_focus_to_index(prev_focus);
 }
 
 void MI_COLOR::printExtension(Rect16 extension_rect, Color color_text, Color color_back, ropfn raster_op) const {
@@ -198,71 +208,4 @@ ScreenFilamentSlot::ScreenFilamentSlot(VirtualToolIndex tool)
     Item<MI_VENDOR>().set_tool(tool);
     Item<MI_TYPE>().set_tool(tool);
     Item<MI_COLOR>().set_tool(tool);
-}
-
-// ScreenFilamentSlotColor
-// =============================================================
-namespace screen_filament_slot_color {
-
-MI_COLOR_OPTION::MI_COLOR_OPTION(FilamentColor color)
-    : IWindowMenuItem({}, nullptr)
-    , color_(color)
-    , name_(color.name())
-    , swatch_(color.color()) {
-    SetLabel(color ? string_view_utf8::MakeRAM(name_.data()) : _("None"));
-}
-
-void MI_COLOR_OPTION::click(IWindowMenu &menu) {
-    const VirtualToolIndex tool = static_cast<WindowMenuColors &>(menu).tool();
-    auto spool = FilamentSpool::for_tool(tool);
-    spool.color = color_;
-    FilamentSpool::set_for_tool(tool, spool);
-    Screens::Access()->Close();
-}
-
-void MI_COLOR_OPTION::printIcon(Rect16 icon_rect, [[maybe_unused]] ropfn raster_op, Color color_back) const {
-    if (swatch_) {
-        filament_swatch::draw(icon_rect, color_back, *swatch_);
-    }
-}
-
-WindowMenuColors::WindowMenuColors(window_t *parent, Rect16 rect)
-    : WindowMenuVirtual(parent, rect, CloseScreenReturnBehavior::yes) {
-}
-
-void WindowMenuColors::set_tool(VirtualToolIndex tool) {
-    tool_ = tool;
-
-    const FilamentColor assigned = FilamentSpool::for_tool(tool).color;
-    items_.clear();
-    items_.push_back({});
-    for (const auto color : FilamentColor::all()) {
-        if (color.is_visible() || color == assigned) {
-            items_.push_back(color);
-        }
-    }
-
-    setup_items();
-
-    // +1 for the return item
-    move_focus_to_index(stdext::index_of(items_, assigned) + 1);
-}
-
-int WindowMenuColors::item_count() const {
-    return items_.size() + 1;
-}
-
-void WindowMenuColors::setup_item(ItemVariant &variant, int index) {
-    if (index == 0) {
-        variant.emplace<MI_RETURN>();
-    } else {
-        variant.emplace<MI_COLOR_OPTION>(items_[index - 1]);
-    }
-}
-
-} // namespace screen_filament_slot_color
-
-ScreenFilamentSlotColor::ScreenFilamentSlotColor(VirtualToolIndex tool)
-    : ScreenMenuBase(nullptr, _("COLOR"), EFooter::Off) {
-    menu.menu.set_tool(tool);
 }
