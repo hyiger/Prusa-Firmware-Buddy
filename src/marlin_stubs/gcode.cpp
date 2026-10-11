@@ -235,6 +235,11 @@ bool GcodeSuite::process_parsed_command_custom(bool no_ok) {
         case 865:
             PrusaGcodeSuite::M865();
             break;
+#if HAS_FILAMENT_SLOTS()
+        case 866:
+            PrusaGcodeSuite::M866();
+            break;
+#endif
 
 #if HAS_CHAMBER_VENTS()
         case 870:

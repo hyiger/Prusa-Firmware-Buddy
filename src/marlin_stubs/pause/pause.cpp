@@ -49,6 +49,10 @@ static_assert(HAS_PAUSE());
 #include <config_store/store_instance.hpp>
 #include <raii/scope_guard.hpp>
 #include <filament_to_load.hpp>
+#include <option/has_filament_slots.h>
+#if HAS_FILAMENT_SLOTS()
+    #include <filament_library.hpp>
+#endif
 #include <common/marlin_client.hpp>
 #include <common/mapi/parking.hpp>
 #include <feature/ramming/ramming_sequence.hpp>
@@ -768,6 +772,10 @@ void Pause::purge_process([[maybe_unused]] Response response) {
     planner.synchronize(); // Finish any pending moves before starting the purge
 
     const auto old_filament = config_store().get_filament_type(settings.virtual_tool());
+#if HAS_FILAMENT_SLOTS()
+    // Setting filament on an empty tool clears its spool, which a failed purge has to undo
+    const auto old_spool = FilamentSpool::previous_for_tool(settings.virtual_tool());
+#endif
     config_store().set_filament_type(settings.virtual_tool(), filament::get_type_to_load());
 
 #if HAS_NOZZLE_CLEANER()
@@ -777,8 +785,15 @@ void Pause::purge_process([[maybe_unused]] Response response) {
 #endif
     if (!purge_ok) {
         config_store().set_filament_type(settings.virtual_tool(), old_filament);
+#if HAS_FILAMENT_SLOTS()
+        FilamentSpool::set_for_tool(settings.virtual_tool(), old_spool);
+#endif
         return;
     }
+
+#if HAS_FILAMENT_SLOTS()
+    FilamentSpool::finish_load(settings.virtual_tool(), filament::get_type_to_load());
+#endif
 
     if constexpr (option::has_human_interactions) {
         set(LoadState::color_correct_ask);

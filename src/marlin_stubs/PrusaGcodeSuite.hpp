@@ -6,6 +6,7 @@
 #include "../../lib/Marlin/Marlin/src/gcode/gcode.h"
 
 #include <option/has_gantry_squareness_check.h>
+#include <option/has_filament_slots.h>
 #include <option/has_heaters_selftest_gcode.h>
 #include <option/has_esp.h>
 #include <option/has_toolchanger.h>
@@ -136,6 +137,10 @@ void M864(); //< spool join control
 #endif
 
 void M865(); //< Set up ad-hoc filament
+
+#if HAS_FILAMENT_SLOTS()
+void M866(); //< Filament slot vendor and color
+#endif
 
 #if HAS_CHAMBER_VENTS()
 void M870(); ///< Open or close ventilation intake

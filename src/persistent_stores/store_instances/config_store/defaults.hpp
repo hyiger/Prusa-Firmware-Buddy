@@ -35,6 +35,11 @@
     #include <module/prusa/indx_dock_position_defaults.hpp>
 #endif
 
+#include <option/has_filament_slots.h>
+#if HAS_FILAMENT_SLOTS()
+    #include <filament_library.hpp>
+#endif
+
 #include <option/has_tool_offset_sensor.h>
 #if HAS_TOOL_OFFSET_SENSOR()
     #include <feature/contactless_offset/clo_config.hpp>
@@ -277,6 +282,32 @@ namespace defaults {
         }
         return result;
     }();
+
+#if HAS_FILAMENT_SLOTS()
+    /// Presets visible, user slots hidden until the user sets them up
+    inline constexpr EncodedBitset<32> visible_filament_vendors { (uint32_t(1) << FilamentVendor::preset_count) - 1 };
+    inline constexpr EncodedBitset<32> visible_filament_colors { (uint32_t(1) << FilamentColor::preset_count) - 1 };
+
+    inline constexpr auto user_filament_vendors = [] {
+        std::array<FilamentLibraryName, user_filament_vendor_count> result;
+        for (size_t i = 0; i < result.size(); i++) {
+            const std::array name { 'V', 'E', 'N', 'D', 'O', 'R', static_cast<char>('1' + i), '\0' };
+            result[i] = name.data();
+        }
+        return result;
+    }();
+    static_assert(user_filament_vendor_count <= 9);
+
+    inline constexpr auto user_filament_colors = [] {
+        std::array<UserFilamentColor_EEPROM, user_filament_color_count> result;
+        for (size_t i = 0; i < result.size(); i++) {
+            const std::array name { 'C', 'O', 'L', 'O', 'R', static_cast<char>('1' + i), '\0' };
+            result[i] = UserFilamentColor_EEPROM { .name = name.data() };
+        }
+        return result;
+    }();
+    static_assert(user_filament_color_count <= 9);
+#endif
 
     inline constexpr FilamentTypeParameters_EEPROM1 adhoc_filament_parameters = {
         .name = "NAME",

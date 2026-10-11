@@ -217,6 +217,10 @@ if(HAS_TOOL_MAPPING)
   target_sources(firmware PRIVATE multi_filament_change.cpp)
 endif()
 
+if(HAS_FILAMENT_SLOTS)
+  target_sources(firmware PRIVATE filament_library.cpp)
+endif()
+
 add_subdirectory(fanctl)
 add_subdirectory(marlin_server_types)
 add_subdirectory(printer_variant)

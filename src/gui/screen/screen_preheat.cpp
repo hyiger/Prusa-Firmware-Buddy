@@ -15,6 +15,11 @@
 #include <client_response_texts.hpp>
 #include <feature/compatibility_checks/filament_compatibility.hpp>
 
+#include <option/has_filament_slots.h>
+#if HAS_FILAMENT_SLOTS()
+    #include <gui/screen/filament/filament_library_dialog.hpp>
+#endif
+
 #if HAS_ANFC()
     #include <feature/openprinttag/tool_tag.hpp>
     #include <screen/openprinttag/screen_opt_filament_detail.hpp>
@@ -388,6 +393,12 @@ bool ScreenPreheat::handle_filament_selection(FilamentType filament_type, Prehea
     if (!compat.gui_confirm_all_incompatibilities(Response::Cancel)) {
         return false;
     }
+
+#if HAS_FILAMENT_SLOTS()
+    if (!filament_library_dialog::pick_spool_for_load(filament_type, tool, mode)) {
+        return false;
+    }
+#endif
 
     marlin_client::FSM_response_variant(PhasesPreheat::user_temp_selection, FSMResponseVariant::make<FilamentType>(filament_type));
     return true;
