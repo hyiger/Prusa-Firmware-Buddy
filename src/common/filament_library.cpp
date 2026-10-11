@@ -267,6 +267,10 @@ void FilamentSpool::pick_for_load(VirtualToolIndex tool, FilamentType type, Fila
     picked_for_load = PickedForLoad { .tool = tool.to_raw(), .type = type, .spool = spool };
 }
 
+void FilamentSpool::drop_pick() {
+    picked_for_load = PickedForLoad {};
+}
+
 void FilamentSpool::start_load(FilamentType type) {
     const PickedForLoad picked = picked_for_load.exchange({});
     loading = picked.type == EncodedFilamentType(type) ? picked : PickedForLoad {};

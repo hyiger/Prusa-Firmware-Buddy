@@ -191,6 +191,8 @@ jobs:
 
           Loading filament asks for the vendor and the color right after the type, the way an AMS does: Load, Change and autoload all show a vendor list and then a color palette with a swatch for each color. They are saved once the load succeeds, and the "Is color correct?" step shows the picked color. After an unload, the tool keeps them as its previous spool, so the next load starts at the same vendor and color.
 
+          Load All and Change All do the same for several tools at once. Set All To asks for the type and the vendor once, then for the color of each tool, so loading eight tools of one vendor and type takes a type, a vendor and eight colors. The tool rows show the picked colors, and picking a tool's filament again changes only its vendor and color. When the changes come from a print, Carry Out the Changes asks for the vendor and color of each tool it loads.
+
           Filament > Filament Slots lists the tools with the vendor, type and color of the filament in each, and corrects them without reloading. Changing the type there changes the loaded filament type without loading anything, as `M865 L` does. The print's tool mapping screen shows each tool's color.
 
           There are 16 preset vendors (Generic, Prusament, Polymaker, Bambu Lab, eSun, Elegoo, Sunlu, Overture, Hatchbox, Inland, 3D-Fuel, Fillamentum, Fiberlogy, Spectrum, Extrudr, colorFabb) and 16 preset colors (Red, Green, Blue, Cyan, Magenta, Yellow, Black, White, Orange, Brown, Gray, Purple, Pink, Silver, Natural, Gold), plus 8 user slots for each. Filament > Manage Filaments has Edit Vendors and Edit Colors to name the user slots and set the hex code of a user color, and Enable Vendors and Enable Colors to choose which entries the lists show.

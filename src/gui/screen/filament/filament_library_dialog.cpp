@@ -1,12 +1,16 @@
 #include "filament_library_dialog.hpp"
 #include "filament_swatch.hpp"
 
+#include <algorithm>
+#include <cctype>
+#include <string_view>
 #include <type_traits>
 
 #include <algorithm_extensions.hpp>
 #include <gui/ScreenHandler.hpp>
 #include <IDialog.hpp>
 #include <inplace_vector.hpp>
+#include <utils/string_builder.hpp>
 #include <window_header.hpp>
 #include <window_menu_adv.hpp>
 #include <window_menu_virtual.hpp>
@@ -135,6 +139,67 @@ std::optional<FilamentColor> pick_color(const string_view_utf8 &title, FilamentC
     return pick(title, current);
 }
 
+namespace {
+
+    /// Dialog title naming a tool, from a translated \p format with one %s for the tool's name.
+    /// The text refers to the object's own buffer, so it cannot be copied.
+    class ToolTitle {
+    public:
+        ToolTitle(VirtualToolIndex tool, const char *format) {
+            VirtualToolIndex::DisplayNameParams name_params;
+            std::array<char, 24> name {};
+            StringBuilder(name).append_string_view(tool.display_name(name_params));
+            text_ = _(format).formatted(params_, name.data());
+
+            // The parameters are kept in the buffer, so this upper-cases the tool's name
+            uppercase_title(params_.buffer);
+        }
+
+        ToolTitle(const ToolTitle &) = delete;
+        ToolTitle &operator=(const ToolTitle &) = delete;
+
+        const string_view_utf8 &text() const {
+            return text_;
+        }
+
+    private:
+        StringViewUtf8Parameters<24> params_;
+        string_view_utf8 text_;
+    };
+
+    std::optional<FilamentSpool> pick_spool(const string_view_utf8 &vendor_title, const string_view_utf8 &color_title, FilamentSpool initial) {
+        FilamentSpool spool = initial;
+        while (true) {
+            const auto vendor = pick_vendor(vendor_title, spool.vendor);
+            if (!vendor) {
+                return std::nullopt;
+            }
+            spool.vendor = *vendor;
+
+            if (const auto color = pick_color(color_title, spool.color)) {
+                spool.color = *color;
+                return spool;
+            }
+        }
+    }
+
+} // namespace
+
+std::optional<FilamentColor> pick_color_for_tool(VirtualToolIndex tool, FilamentColor current) {
+    const ToolTitle title(tool, N_("%s COLOR"));
+    return pick_color(title.text(), current);
+}
+
+std::optional<FilamentSpool> pick_spool(FilamentSpool initial) {
+    return pick_spool(_("VENDOR"), _("COLOR"), initial);
+}
+
+std::optional<FilamentSpool> pick_spool_for_tool(VirtualToolIndex tool, FilamentSpool initial) {
+    const ToolTitle vendor_title(tool, N_("%s VENDOR"));
+    const ToolTitle color_title(tool, N_("%s COLOR"));
+    return pick_spool(vendor_title.text(), color_title.text(), initial);
+}
+
 bool pick_spool_for_load(FilamentType type, std::variant<VirtualToolIndex, AllTools> tool, PreheatMode mode) {
     switch (mode) {
 
@@ -154,21 +219,20 @@ bool pick_spool_for_load(FilamentType type, std::variant<VirtualToolIndex, AllTo
         return true;
     }
 
-    FilamentSpool spool = FilamentSpool::previous_for_tool(*virtual_tool);
-    while (true) {
-        const auto vendor = pick_vendor(_("VENDOR"), spool.vendor);
-        if (!vendor) {
-            return false;
-        }
-        spool.vendor = *vendor;
-
-        // Going back from the color returns to the vendor
-        if (const auto color = pick_color(_("COLOR"), spool.color)) {
-            spool.color = *color;
-            FilamentSpool::pick_for_load(*virtual_tool, type, spool);
-            return true;
-        }
+    const auto spool = pick_spool(FilamentSpool::previous_for_tool(*virtual_tool));
+    if (!spool) {
+        return false;
     }
+    FilamentSpool::pick_for_load(*virtual_tool, type, *spool);
+    return true;
+}
+
+void uppercase_title(std::span<char> text) {
+    const std::string_view view(text.data(), strnlen(text.data(), text.size()));
+    if (!std::ranges::all_of(view, [](char ch) { return static_cast<unsigned char>(ch) < 0x80; })) {
+        return;
+    }
+    std::ranges::transform(text, text.begin(), [](char ch) { return static_cast<char>(toupper(ch)); });
 }
 
 } // namespace filament_library_dialog

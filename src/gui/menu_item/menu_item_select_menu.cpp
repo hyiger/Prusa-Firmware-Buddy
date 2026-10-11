@@ -42,7 +42,7 @@ public:
 class Dialog final : public IDialog {
 
 public:
-    Dialog(MenuItemSelectMenu &menu);
+    Dialog(MenuItemSelectMenu &menu, int focus_item);
 
     std::optional<int> result() const {
         return menu_.menu.result;
@@ -89,13 +89,13 @@ void DialogMenu::setup_item(ItemVariant &variant, int index) {
 
 // Dialog
 // =============================================================
-Dialog::Dialog(MenuItemSelectMenu &menu)
+Dialog::Dialog(MenuItemSelectMenu &menu, int focus_item)
     : IDialog(GuiDefaults::RectScreen)
     , header_(this, menu.GetLabel())
     , menu_(this, GuiDefaults::RectScreenNoHeader, menu) //
 {
     CaptureNormalWindow(menu_);
-    menu_.menu.move_focus_to_index(menu.current_item() + 1);
+    menu_.menu.move_focus_to_index(focus_item + 1);
 }
 
 } // namespace
@@ -198,6 +198,7 @@ void MenuItemSelectMenu::click(IWindowMenu &menu) {
     const auto prev_focus = menu.focused_item_index();
 
     int new_item;
+    bool reselected = false;
 
     switch (behavior_) {
 
@@ -206,9 +207,10 @@ void MenuItemSelectMenu::click(IWindowMenu &menu) {
 
         {
             // The dialog is quite big - keep it on stack as shortly as possible
-            Dialog dlg(*this);
+            Dialog dlg(*this, submenu_focus_item());
             Screens::Access()->gui_loop_until_dialog_closed();
             new_item = dlg.result().value_or(current_item_);
+            reselected = dlg.result() == current_item_;
         }
 
         // Opening a dialog with a menu screws up focus for the current menu - we need to restore it
@@ -222,6 +224,9 @@ void MenuItemSelectMenu::click(IWindowMenu &menu) {
     }
 
     if (new_item == current_item_) {
+        if (reselected) {
+            on_item_reselected(menu);
+        }
         return;
     }
 
