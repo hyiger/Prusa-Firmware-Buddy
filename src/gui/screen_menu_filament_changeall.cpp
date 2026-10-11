@@ -15,6 +15,11 @@
 #include <option/has_toolchanger.h>
 #include <bsod/bsod.h>
 
+#if HAS_FILAMENT_SLOTS()
+    #include <gui/screen/filament/filament_library_dialog.hpp>
+    #include <gui/screen/filament/filament_swatch.hpp>
+#endif
+
 using namespace multi_filament_change;
 
 MI_ActionSelect::MI_ActionSelect(uint8_t tool_ix)
@@ -49,6 +54,10 @@ void MI_ActionSelect::set_config(const ConfigItem &set) {
     index_mapping.set_section_size<Action::change>(filament_list.size());
 
     color = set.color;
+#if HAS_FILAMENT_SLOTS()
+    spool_ = set.spool;
+    InValidateIcon();
+#endif
     set_current_item([&] -> size_t {
         switch (set.action) {
         case Action::keep:
@@ -67,11 +76,17 @@ void MI_ActionSelect::set_config(const ConfigItem &set) {
 
 ConfigItem MI_ActionSelect::config(int item_index) const {
     const auto mapping = index_mapping.from_index(item_index);
-    return ConfigItem {
+    ConfigItem result {
         .action = mapping.item,
         .new_filament = (mapping.item == Action::change) ? filament_list[mapping.pos_in_section] : FilamentType::none,
         .color = color
     };
+#if HAS_FILAMENT_SLOTS()
+    if (mapping.item == Action::change) {
+        result.spool = spool_;
+    }
+#endif
+    return result;
 }
 
 int MI_ActionSelect::item_count() const {
@@ -118,6 +133,13 @@ bool MI_ActionSelect::on_item_selected(const OnItemSelectedArgs &args) {
             config_item.color = orig_color;
         }
 
+#if HAS_FILAMENT_SLOTS()
+        if (new_config_item.action == Action::change && !pick_spools_for_all(new_config, args.menu)) {
+            reopen_at_ = args.new_index;
+            return false;
+        }
+#endif
+
         menu.set_configuration(new_config);
 
     } else {
@@ -126,11 +148,107 @@ bool MI_ActionSelect::on_item_selected(const OnItemSelectedArgs &args) {
             return false;
         }
 
+#if HAS_FILAMENT_SLOTS()
+        if (new_config_item.action == Action::change && !pick_spool(args.menu)) {
+            reopen_at_ = args.new_index;
+            return false;
+        }
+#endif
+
         // Just let current_item to be updated by the parent, will be picked up by the owning menu
     }
 
     return true;
 }
+
+#if HAS_FILAMENT_SLOTS()
+void MI_ActionSelect::click(IWindowMenu &menu) {
+    // Going back from the vendor returns to the filament list, as when loading into a single tool
+    do {
+        MenuItemSelectMenu::click(menu);
+    } while (reopen_at_);
+}
+
+void MI_ActionSelect::on_item_reselected(IWindowMenu &menu) {
+    // Picking the same filament again changes only its vendor and color
+    if (std::holds_alternative<VirtualToolIndex>(tool_filter_) && config().action == Action::change && !pick_spool(menu)) {
+        reopen_at_ = current_item();
+    }
+}
+
+int MI_ActionSelect::submenu_focus_item() {
+    return std::exchange(reopen_at_, std::nullopt).value_or(current_item());
+}
+
+bool MI_ActionSelect::pick_spool(IWindowMenu &menu) {
+    const auto tool = std::get<VirtualToolIndex>(tool_filter_);
+    const bool has_pick = config().action == Action::change && spool_ != ConfigItem::unpicked_spool;
+    const auto prev_focus = menu.focused_item_index();
+    const auto picked = filament_library_dialog::pick_spool_for_tool(tool, has_pick ? spool_ : FilamentSpool::previous_for_tool(tool));
+
+    // Opening a dialog with a menu moves the focus of the current menu
+    menu.move_focus_to_index(prev_focus);
+
+    if (!picked) {
+        return false;
+    }
+    spool_ = *picked;
+    InValidateIcon();
+    return true;
+}
+
+bool MI_ActionSelect::pick_spools_for_all(Config &config, IWindowMenu &menu) {
+    const auto tools = VirtualToolIndex::all().skip_all_disabled();
+    const auto prev_focus = menu.focused_item_index();
+    const auto restore_focus = [&] {
+        // Opening a dialog with a menu moves the focus of the current menu
+        menu.move_focus_to_index(prev_focus);
+    };
+
+    if (tools.at_end()) {
+        return true;
+    }
+
+    // The vendor list starts at the first tool's previous vendor
+    const auto vendor = filament_library_dialog::pick_vendor(_("VENDOR"), FilamentSpool::previous_for_tool(*tools).vendor);
+    if (!vendor) {
+        restore_focus();
+        return false;
+    }
+
+    // Going back from a tool's color stops asking, and the remaining tools keep their previous colors
+    bool asking = true;
+    for (const auto tool : tools) {
+        auto &item = config[tool];
+        if (item.action != Action::change) {
+            continue;
+        }
+
+        FilamentColor color = FilamentSpool::previous_for_tool(tool).color;
+        if (asking) {
+            if (const auto picked = filament_library_dialog::pick_color_for_tool(tool, color)) {
+                color = *picked;
+            } else {
+                asking = false;
+            }
+        }
+        item.spool = FilamentSpool { .vendor = *vendor, .color = color };
+    }
+
+    restore_focus();
+    return true;
+}
+
+void MI_ActionSelect::printIcon(Rect16 icon_rect, ropfn raster_op, Color color_back) const {
+    if (std::holds_alternative<VirtualToolIndex>(tool_filter_) && config().action == Action::change) {
+        if (const auto swatch = spool_.color.color()) {
+            filament_swatch::draw(icon_rect, color_back, *swatch);
+            return;
+        }
+    }
+    MenuItemSelectMenu::printIcon(icon_rect, raster_op, color_back);
+}
+#endif
 
 MI_ApplyChanges::MI_ApplyChanges()
     : IWindowMenuItem(_("Carry Out the Changes"), &img::arrow_right_10x16, is_enabled_t::yes, is_hidden_t::no) {}
@@ -209,9 +327,15 @@ void MenuMultiFilamentChange::windowEvent(window_t *sender, GUI_event_t event, v
 }
 
 bool MenuMultiFilamentChange::carry_out_changes() {
+    auto config = configuration();
+#if HAS_FILAMENT_SLOTS()
+    if (!pick_missing_spools(config)) {
+        return false;
+    }
+#endif
+
     // Note: This potentially duplicates warnings raised by manually changing the items
     // But the config could have been pre-filled, so better to sometimes warn twice than sometimes not at all
-    const auto config = configuration();
     if (!gui_config_confirm_incompatibilities(config, Response::Cancel)) {
         return false;
     }
@@ -221,6 +345,40 @@ bool MenuMultiFilamentChange::carry_out_changes() {
     marlin_client::gcode(sb.str());
     return true;
 }
+
+#if HAS_FILAMENT_SLOTS()
+bool MenuMultiFilamentChange::pick_missing_spools(MultiFilamentChangeConfig &config) {
+    const auto is_missing = [](const ConfigItem &item) {
+        return item.action == Action::change && item.spool == ConfigItem::unpicked_spool;
+    };
+    if (std::ranges::none_of(config, is_missing)) {
+        return true;
+    }
+
+    const auto prev_focus = focused_item_index();
+    bool picked_all = true;
+    for (const auto tool : VirtualToolIndex::all().skip_all_disabled()) {
+        auto &item = config[tool];
+        if (!is_missing(item)) {
+            continue;
+        }
+
+        const auto picked = filament_library_dialog::pick_spool_for_tool(tool, FilamentSpool::previous_for_tool(tool));
+        if (!picked) {
+            picked_all = false;
+            break;
+        }
+        item.spool = *picked;
+    }
+
+    // Carrying out the changes again after going back does not ask for what was picked
+    set_configuration(config);
+
+    // Opening a dialog with a menu moves the focus of the current menu
+    move_focus_to_index(prev_focus);
+    return picked_all;
+}
+#endif
 
 static constexpr const char *header_text = HAS_MMU2() ? N_("FILAMENT CHANGE") : N_("MULTITOOL FILAMENT CHANGE");
 

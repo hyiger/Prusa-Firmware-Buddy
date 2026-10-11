@@ -196,9 +196,13 @@ struct FilamentSpool {
 
     static void set_for_tool(VirtualToolIndex tool, FilamentSpool spool);
 
-    /// Remembers \p spool, picked in the GUI, for loading \p type into \p tool.
-    /// Called from the GUI thread, while the load waits for the user to pick the filament.
+    /// Remembers \p spool for loading \p type into \p tool. Called from the GUI thread while a load waits
+    /// for the user to pick the filament, or by the Marlin thread right before each load of a multi-tool change.
     static void pick_for_load(VirtualToolIndex tool, FilamentType type, FilamentSpool spool);
+
+    /// Drops a pick that no load took. For code that hands one over and can then stop before the load
+    /// starts, such as a multi-tool change whose unload is stopped.
+    static void drop_pick();
 
     /// Called by the Marlin thread when a load starts with \p type, from filament::set_type_to_load.
     /// Takes the spool picked for it, if any. A pick counts only for the load right after it, so a

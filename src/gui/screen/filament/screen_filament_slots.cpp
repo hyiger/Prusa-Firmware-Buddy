@@ -2,8 +2,6 @@
 #include "filament_library_dialog.hpp"
 #include "filament_swatch.hpp"
 
-#include <algorithm>
-#include <cctype>
 #include <cstdio>
 
 #include <algorithm_extensions.hpp>
@@ -196,12 +194,7 @@ void MI_COLOR::printExtension(Rect16 extension_rect, Color color_text, Color col
 ScreenFilamentSlot::ScreenFilamentSlot(VirtualToolIndex tool)
     : screen_filament_slot::ScreenFilamentSlot_(string_view_utf8::MakeNULLSTR()) {
     StringBuilder(title_).append_string_view(tool.display_name(title_params_));
-
-    // Screen titles are upper case. A translated name with non-ASCII letters is left as it is,
-    // rather than upper-casing only some of its letters.
-    if (std::ranges::all_of(std::string_view(title_.data()), [](char ch) { return static_cast<unsigned char>(ch) < 0x80; })) {
-        std::ranges::transform(title_, title_.begin(), [](char ch) { return static_cast<char>(toupper(ch)); });
-    }
+    filament_library_dialog::uppercase_title(title_);
     header.SetText(string_view_utf8::MakeRAM(title_.data()));
 
     using namespace screen_filament_slot;
