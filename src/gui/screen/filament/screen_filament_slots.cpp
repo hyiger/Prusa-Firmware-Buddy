@@ -1,6 +1,7 @@
 #include "screen_filament_slots.hpp"
 #include "filament_library_dialog.hpp"
 #include "filament_swatch.hpp"
+#include "screen_filament_detail.hpp"
 
 #include <cstdio>
 
@@ -11,6 +12,11 @@
 #include <marlin_client.hpp>
 #include <multi_filament_change.hpp>
 #include <utils/string_builder.hpp>
+
+#if HAS_ANFC()
+    #include <feature/openprinttag/utils.hpp>
+    #include <gui/screen/openprinttag/screen_opt_info.hpp>
+#endif
 
 namespace {
 
@@ -189,6 +195,29 @@ void MI_COLOR::printExtension(Rect16 extension_rect, Color color_text, Color col
     filament_swatch::print_with_text(extension_rect, color_, color_ ? string_view_utf8::MakeRAM(name_.data()) : _("No color"), color_text, color_back, raster_op, filament_swatch::Arrow::yes);
 }
 
+MI_DETAILS::MI_DETAILS()
+    : IWindowMenuItem(_("Filament Details"), nullptr, is_enabled_t::yes, is_hidden_t::no, expands_t::yes) {
+}
+
+void MI_DETAILS::set_tool(VirtualToolIndex tool) {
+    tool_ = tool;
+}
+
+void MI_DETAILS::click(IWindowMenu &) {
+#if HAS_ANFC()
+    Screens::Access()->Open(buddy::openprinttag::screen_opt_info_loaded_creator(tool_));
+#else
+    // The type can change on this screen, so it is read when opening the details
+    Screens::Access()->Open(ScreenFactory::ScreenWithArg<ScreenFilamentDetail>(EncodedFilamentType(FilamentType::for_tool(tool_))));
+#endif
+}
+
+#if HAS_ANFC()
+void MI_DETAILS::Loop() {
+    SetIconId(buddy::openprinttag::tool_tag_status_icon(tool_));
+}
+#endif
+
 } // namespace screen_filament_slot
 
 ScreenFilamentSlot::ScreenFilamentSlot(VirtualToolIndex tool)
@@ -201,4 +230,5 @@ ScreenFilamentSlot::ScreenFilamentSlot(VirtualToolIndex tool)
     Item<MI_VENDOR>().set_tool(tool);
     Item<MI_TYPE>().set_tool(tool);
     Item<MI_COLOR>().set_tool(tool);
+    Item<MI_DETAILS>().set_tool(tool);
 }

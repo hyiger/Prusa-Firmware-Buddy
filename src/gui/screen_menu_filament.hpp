@@ -10,17 +10,20 @@
 #include "MItem_tools.hpp"
 #include <option/has_toolchanger.h>
 #include <option/has_wastebin_fill_tracking.h>
-#include <gui/screen/filament/screen_filaments_loaded.hpp>
 #include <option/has_filament_slots.h>
 #if HAS_FILAMENT_SLOTS()
     #include <gui/screen/filament/screen_filament_slots.hpp>
+#else
+    #include <gui/screen/filament/screen_filaments_loaded.hpp>
 #endif
 
 using ScreenMenuFilament__ = ScreenMenu<GuiDefaults::MenuFooter,
     MI_RETURN,
-    MI_LOADED_FILAMENT,
 #if HAS_FILAMENT_SLOTS()
+    // Takes the place of Loaded filaments, whose details each slot opens
     MI_FILAMENT_SLOTS,
+#else
+    MI_LOADED_FILAMENT,
 #endif
 #if HAS_WASTEBIN_FILL_TRACKING()
     MI_NOZZLE_CLEANER_EMPTY_WASTEBIN,

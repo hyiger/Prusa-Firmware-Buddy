@@ -12,6 +12,7 @@
 #include <i_window_menu_item.hpp>
 #include <inplace_vector.hpp>
 #include <meta_utils.hpp>
+#include <option/has_anfc.h>
 #include <screen_menu.hpp>
 #include <tool_index.hpp>
 #include <WindowMenuItems.hpp>
@@ -118,7 +119,25 @@ private:
     std::optional<Color> color_;
 };
 
-using ScreenFilamentSlot_ = ScreenMenu<GuiDefaults::MenuFooter, MI_RETURN, MI_VENDOR, MI_TYPE, MI_COLOR>;
+/// Opens the details of the loaded filament, as Loaded filaments does: the OpenPrintTag info on printers
+/// that read tags, the filament type's parameters otherwise
+class MI_DETAILS final : public IWindowMenuItem {
+public:
+    MI_DETAILS();
+
+    void set_tool(VirtualToolIndex tool);
+
+protected:
+    void click(IWindowMenu &) override;
+#if HAS_ANFC()
+    void Loop() override;
+#endif
+
+private:
+    VirtualToolIndex tool_ = VirtualToolIndex::from_raw(0);
+};
+
+using ScreenFilamentSlot_ = ScreenMenu<GuiDefaults::MenuFooter, MI_RETURN, MI_VENDOR, MI_TYPE, MI_COLOR, MI_DETAILS>;
 
 } // namespace screen_filament_slot
 
