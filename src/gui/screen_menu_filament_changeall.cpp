@@ -209,16 +209,18 @@ bool MI_ActionSelect::pick_spools_for_all(Config &config, IWindowMenu &menu) {
         return true;
     }
 
+    // The vendor list starts at the first tool's previous vendor, and at the picked one after going back
+    FilamentVendor vendor_focus = FilamentSpool::previous_for_tool(*tools).vendor;
     while (true) {
-        // The vendor list starts at the first tool's previous vendor
-        const auto vendor = filament_library_dialog::pick_vendor(_("VENDOR"), FilamentSpool::previous_for_tool(*tools).vendor);
+        const auto vendor = filament_library_dialog::pick_vendor(_("VENDOR"), vendor_focus);
         if (!vendor) {
             restore_focus();
             return false;
         }
+        vendor_focus = *vendor;
 
         Config picked = config;
-        bool asked = false;
+        bool loading = false;
         bool leave_out_rest = false;
         bool back_to_vendor = false;
         for (const auto tool : tools) {
@@ -237,9 +239,9 @@ bool MI_ActionSelect::pick_spools_for_all(Config &config, IWindowMenu &menu) {
 
             const auto color = filament_library_dialog::pick_color_for_tool(tool, FilamentSpool::previous_for_tool(tool).color);
             if (!color) {
-                // Going back from the first color returns to the vendor. From a later one, it leaves
-                // that tool and the remaining ones out.
-                if (!asked) {
+                // Going back leaves this tool and the remaining ones out. Before any tool got a color,
+                // that would leave nothing to load, so it returns to the vendor instead.
+                if (!loading) {
                     back_to_vendor = true;
                     break;
                 }
@@ -248,11 +250,11 @@ bool MI_ActionSelect::pick_spools_for_all(Config &config, IWindowMenu &menu) {
                 continue;
             }
 
-            asked = true;
             if (std::holds_alternative<filament_library_dialog::DontLoad>(*color)) {
                 leave_out();
             } else {
                 item.spool = FilamentSpool { .vendor = *vendor, .color = std::get<FilamentColor>(*color) };
+                loading = true;
             }
         }
 

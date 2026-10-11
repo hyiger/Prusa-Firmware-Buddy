@@ -55,7 +55,7 @@ private:
 
     /// Asks for a vendor once, then for the color of each tool in \p config that gets new filament.
     /// "Don't load" leaves a tool out, and going back from a tool's color leaves it and the remaining
-    /// tools out, except for the first tool, where it returns to the vendor.
+    /// tools out. Going back before any tool got a color returns to the vendor.
     /// \returns false if the user went back from the vendor
     static bool pick_spools_for_all(Config &config, IWindowMenu &menu);
 #endif
