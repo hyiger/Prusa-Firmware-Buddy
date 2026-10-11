@@ -64,6 +64,14 @@ protected:
         return true;
     }
 
+    /// Called when the user picks the item that is already selected from the submenu
+    virtual void on_item_reselected([[maybe_unused]] IWindowMenu &menu) {}
+
+    /// \returns the item to focus when the submenu opens. Called each time it opens.
+    virtual int submenu_focus_item() {
+        return current_item_;
+    }
+
 protected:
     /// Resolves the value text color (base highlights the focused & enabled item).
     /// @param base_color color used when the item is not focused & enabled

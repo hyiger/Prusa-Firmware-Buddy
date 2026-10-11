@@ -13,6 +13,7 @@
 #include <mapi/parking.hpp>
 #include <Marlin/src/module/motion.h>
 #include <bsod/bsod.h>
+#include <raii/scope_guard.hpp>
 #include <utils/byte_utils.hpp>
 #include <feature/compatibility_checks/filament_compatibility.hpp>
 
@@ -207,6 +208,14 @@ void execute(const Config &tool_config) {
             config_store().set_filament_type(tool, config.new_filament);
 #else
             const FilamentType new_filament { config.new_filament };
+    #if HAS_FILAMENT_SLOTS()
+            // Handed over just before the load, which takes it when it starts. A change stopped before its
+            // load, for example during the unload, must not leave the pick for a later load to take.
+            FilamentSpool::pick_for_load(tool, new_filament, config.spool == ConfigItem::unpicked_spool ? FilamentSpool {} : config.spool);
+            ScopeGuard drop_pick = [] {
+                FilamentSpool::drop_pick();
+            };
+    #endif
             if (old_filaments[tool] != FilamentType::none) {
                 filament_gcodes::M1600_change_filament(
                     new_filament,

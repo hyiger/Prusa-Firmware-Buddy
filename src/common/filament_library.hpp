@@ -196,19 +196,30 @@ struct FilamentSpool {
 
     static void set_for_tool(VirtualToolIndex tool, FilamentSpool spool);
 
-    /// Remembers \p spool, picked in the GUI, for loading \p type into \p tool.
-    /// Called from the GUI thread, while the load waits for the user to pick the filament.
+    /// Remembers \p spool for loading \p type into \p tool. Called from the GUI thread while a load waits
+    /// for the user to pick the filament, or by the Marlin thread right before each load of a multi-tool change.
     static void pick_for_load(VirtualToolIndex tool, FilamentType type, FilamentSpool spool);
 
+    /// Drops a pick that no load took. For code that hands one over and can then stop before the load
+    /// starts, such as a multi-tool change whose unload is stopped.
+    static void drop_pick();
+
     /// Called by the Marlin thread when a load starts with \p type, from filament::set_type_to_load.
-    /// Takes the spool picked for it, if any. A pick counts only for the load right after it, so a
-    /// pick left by a load that never started is dropped here.
+    /// Takes the spool picked for it, if any, and keeps it until the next load starts. A pick counts
+    /// only for the load right after it, so a pick left by a load that never started is dropped here.
+    /// Every load and purge goes through here first, so no later one can reuse the spool.
     static void start_load(FilamentType type);
 
-    /// Assigns the spool taken by start_load to \p tool, once loading \p type into it succeeded.
+    /// Assigns the spool taken by start_load to \p tool, once purging \p type into it succeeded. Each
+    /// purge of the load assigns it again, as after the filament was pulled out and pushed back in.
     /// Filament loaded without a pick, such as from G-code, ends up without a spool anyway, because
     /// setting filament on an empty tool clears it. A purge without a load keeps the spool.
     static void finish_load(VirtualToolIndex tool, FilamentType type);
+
+    /// Called when purging \p type into \p tool fails. When that leaves the tool empty, with \p type
+    /// as its previous filament, the spool taken by start_load becomes the previous spool, so the two
+    /// stay paired.
+    static void fail_load(VirtualToolIndex tool, FilamentType type);
 
     constexpr bool operator==(const FilamentSpool &) const = default;
     constexpr bool operator!=(const FilamentSpool &) const = default;

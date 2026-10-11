@@ -43,8 +43,32 @@ private:
 
     bool on_item_selected(const OnItemSelectedArgs &args) override;
 
+#if HAS_FILAMENT_SLOTS()
+    void click(IWindowMenu &menu) override;
+    void on_item_reselected(IWindowMenu &menu) override;
+    int submenu_focus_item() override;
+    void printIcon(Rect16 icon_rect, ropfn raster_op, Color color_back) const override;
+
+    /// Asks for the vendor and color of the tool's new filament, starting at what was picked before.
+    /// \returns false if the user went back
+    bool pick_spool(IWindowMenu &menu);
+
+    /// Asks for a vendor once, then for the color of each tool in \p config that gets new filament.
+    /// "Don't load" leaves a tool out, and going back from a tool's color leaves it and the remaining
+    /// tools out. Going back before any tool got a color returns to the vendor.
+    /// \returns false if the user went back from the vendor
+    static bool pick_spools_for_all(Config &config, IWindowMenu &menu);
+#endif
+
 private:
     CompactOptional<Color, COLOR_NONE> color;
+
+#if HAS_FILAMENT_SLOTS()
+    FilamentSpool spool_ = ConfigItem::unpicked_spool;
+
+    /// Item to reopen the list at, after the user went back from picking its vendor and color
+    std::optional<int> reopen_at_;
+#endif
 
     StringViewUtf8Parameters<2> label_params;
     DynamicIndexMapping<items> index_mapping;
@@ -93,6 +117,13 @@ protected:
 
 private:
     [[nodiscard]] bool carry_out_changes();
+
+#if HAS_FILAMENT_SLOTS()
+    /// Asks for the vendor and color of each tool in \p config to be loaded without them yet,
+    /// such as when the changes come from the print. Keeps what was picked in the menu.
+    /// \returns false if the user went back
+    [[nodiscard]] bool pick_missing_spools(MultiFilamentChangeConfig &config);
+#endif
 
 private:
     MenuMultiFilamentChange_::Container container;

@@ -11,6 +11,11 @@
 #include <general_response.hpp>
 #include <feature/compatibility_checks/compatibility_checks_common.hpp>
 
+#include <option/has_filament_slots.h>
+#if HAS_FILAMENT_SLOTS()
+    #include <filament_library.hpp>
+#endif
+
 namespace multi_filament_change {
 
 enum class Action : uint8_t {
@@ -25,10 +30,23 @@ enum class Action : uint8_t {
 };
 
 struct ConfigItem {
+#if HAS_FILAMENT_SLOTS()
+    /// Marks a spool that nobody picked yet, as opposed to a picked None
+    static constexpr FilamentSpool unpicked_spool { .vendor = FilamentVendor { 0xff }, .color = FilamentColor { 0xff } };
+#endif
+
     Action action = Action::keep;
     EncodedFilamentType new_filament = FilamentType::none;
+#if HAS_FILAMENT_SLOTS()
+    /// Vendor and color picked for the new filament, assigned once it is loaded
+    FilamentSpool spool = unpicked_spool;
+#endif
     CompactOptional<Color, COLOR_NONE> color;
 };
+#if HAS_FILAMENT_SLOTS()
+// The spool sits in what was padding before the color, so the M9934 gcode does not grow
+static_assert(sizeof(ConfigItem) == 8);
+#endif
 
 using Config = StrongIndexArray<ConfigItem, VirtualToolIndex::count, VirtualToolIndex, VirtualToolIndex::to_raw_static>;
 

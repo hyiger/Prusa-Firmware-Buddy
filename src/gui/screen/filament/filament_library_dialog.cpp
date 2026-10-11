@@ -1,12 +1,16 @@
 #include "filament_library_dialog.hpp"
 #include "filament_swatch.hpp"
 
+#include <algorithm>
+#include <cctype>
+#include <string_view>
 #include <type_traits>
 
 #include <algorithm_extensions.hpp>
 #include <gui/ScreenHandler.hpp>
 #include <IDialog.hpp>
 #include <inplace_vector.hpp>
+#include <utils/string_builder.hpp>
 #include <window_header.hpp>
 #include <window_menu_adv.hpp>
 #include <window_menu_virtual.hpp>
@@ -31,17 +35,29 @@ namespace {
         std::optional<Color> swatch_;
     };
 
+    /// "Don't load", for leaving a tool out when picking colors for several tools
+    template <typename Item>
+    class DontLoadItem final : public IWindowMenuItem {
+    public:
+        DontLoadItem()
+            : IWindowMenuItem(_("Don't load"), nullptr) {}
+
+    protected:
+        void click(IWindowMenu &menu) override;
+    };
+
     // The dialog lives on the stack, so the menu only reserves room for its own items
     template <typename Item>
     class DialogMenu final : public WindowMenuVirtualSized<WindowMenuVirtualBase::default_item_buffer_size, sizeof(DialogItem<Item>)> {
     public:
-        DialogMenu(window_t *parent, Rect16 rect, Item current);
+        DialogMenu(window_t *parent, Rect16 rect, Item current, bool offer_dont_load);
 
         int item_count() const final {
-            return items_.size() + 1;
+            return items_.size() + first_item_;
         }
 
         std::optional<Item> result;
+        bool dont_load = false;
 
     protected:
         void setup_item(typename DialogMenu::ItemVariant &variant, int index) final;
@@ -49,20 +65,27 @@ namespace {
     private:
         /// None, then the visible items, plus the current one if it is hidden
         stdext::inplace_vector<Item, Item::total_count + 1> items_;
+
+        /// Menu index of the first of items_: after Return, and after "Don't load" when offered
+        uint8_t first_item_;
     };
 
     template <typename Item>
     class Dialog final : public IDialog {
     public:
-        Dialog(const string_view_utf8 &title, Item current)
+        Dialog(const string_view_utf8 &title, Item current, bool offer_dont_load = false)
             : IDialog(GuiDefaults::RectScreen)
             , header_(this, title)
-            , menu_(this, GuiDefaults::RectScreenNoHeader, current) {
+            , menu_(this, GuiDefaults::RectScreenNoHeader, current, offer_dont_load) {
             CaptureNormalWindow(menu_);
         }
 
         std::optional<Item> result() const {
             return menu_.menu.result;
+        }
+
+        bool dont_load() const {
+            return menu_.menu.dont_load;
         }
 
     private:
@@ -78,7 +101,13 @@ namespace {
         if constexpr (std::is_same_v<Item, FilamentColor>) {
             swatch_ = item.color();
         }
-        SetLabel(item ? string_view_utf8::MakeRAM(name_.data()) : _("None"));
+        if (item) {
+            SetLabel(string_view_utf8::MakeRAM(name_.data()));
+        } else if constexpr (std::is_same_v<Item, FilamentColor>) {
+            SetLabel(_("No color"));
+        } else {
+            SetLabel(_("No vendor"));
+        }
     }
 
     template <typename Item>
@@ -95,8 +124,15 @@ namespace {
     }
 
     template <typename Item>
-    DialogMenu<Item>::DialogMenu(window_t *parent, Rect16 rect, Item current)
-        : WindowMenuVirtualSized<WindowMenuVirtualBase::default_item_buffer_size, sizeof(DialogItem<Item>)>(parent, rect, WindowMenuVirtualBase::CloseScreenReturnBehavior::yes) {
+    void DontLoadItem<Item>::click(IWindowMenu &menu) {
+        static_cast<DialogMenu<Item> &>(menu).dont_load = true;
+        Screens::Access()->Close();
+    }
+
+    template <typename Item>
+    DialogMenu<Item>::DialogMenu(window_t *parent, Rect16 rect, Item current, bool offer_dont_load)
+        : WindowMenuVirtualSized<WindowMenuVirtualBase::default_item_buffer_size, sizeof(DialogItem<Item>)>(parent, rect, WindowMenuVirtualBase::CloseScreenReturnBehavior::yes)
+        , first_item_(offer_dont_load ? 2 : 1) {
         items_.push_back({});
         for (const auto item : Item::all()) {
             if (item.is_visible() || item == current) {
@@ -104,17 +140,17 @@ namespace {
             }
         }
         this->setup_items();
-
-        // +1 for the return item
-        this->move_focus_to_index(stdext::index_of(items_, current) + 1);
+        this->move_focus_to_index(stdext::index_of(items_, current) + first_item_);
     }
 
     template <typename Item>
     void DialogMenu<Item>::setup_item(typename DialogMenu::ItemVariant &variant, int index) {
         if (index == 0) {
             variant.template emplace<MI_RETURN>();
+        } else if (index < first_item_) {
+            variant.template emplace<DontLoadItem<Item>>();
         } else {
-            variant.template emplace<DialogItem<Item>>(items_[index - 1]);
+            variant.template emplace<DialogItem<Item>>(items_[index - first_item_]);
         }
     }
 
@@ -133,6 +169,72 @@ std::optional<FilamentVendor> pick_vendor(const string_view_utf8 &title, Filamen
 
 std::optional<FilamentColor> pick_color(const string_view_utf8 &title, FilamentColor current) {
     return pick(title, current);
+}
+
+namespace {
+
+    /// Dialog title naming a tool, from a translated \p format with one %s for the tool's name.
+    /// The text refers to the object's own buffer, so it cannot be copied.
+    class ToolTitle {
+    public:
+        ToolTitle(VirtualToolIndex tool, const char *format) {
+            VirtualToolIndex::DisplayNameParams name_params;
+            std::array<char, 24> name {};
+            StringBuilder(name).append_string_view(tool.display_name(name_params));
+            text_ = _(format).formatted(params_, name.data());
+
+            // The parameters are kept in the buffer, so this upper-cases the tool's name
+            uppercase_title(params_.buffer);
+        }
+
+        ToolTitle(const ToolTitle &) = delete;
+        ToolTitle &operator=(const ToolTitle &) = delete;
+
+        const string_view_utf8 &text() const {
+            return text_;
+        }
+
+    private:
+        StringViewUtf8Parameters<24> params_;
+        string_view_utf8 text_;
+    };
+
+    std::optional<FilamentSpool> pick_spool(const string_view_utf8 &vendor_title, const string_view_utf8 &color_title, FilamentSpool initial) {
+        FilamentSpool spool = initial;
+        while (true) {
+            const auto vendor = pick_vendor(vendor_title, spool.vendor);
+            if (!vendor) {
+                return std::nullopt;
+            }
+            spool.vendor = *vendor;
+
+            if (const auto color = pick_color(color_title, spool.color)) {
+                spool.color = *color;
+                return spool;
+            }
+        }
+    }
+
+} // namespace
+
+std::optional<ColorOrDontLoad> pick_color_for_tool(VirtualToolIndex tool, FilamentColor current) {
+    const ToolTitle title(tool, N_("%s COLOR"));
+    Dialog<FilamentColor> dialog(title.text(), current, true);
+    Screens::Access()->gui_loop_until_dialog_closed();
+    if (dialog.dont_load()) {
+        return DontLoad {};
+    }
+    return dialog.result();
+}
+
+std::optional<FilamentSpool> pick_spool(FilamentSpool initial) {
+    return pick_spool(_("VENDOR"), _("COLOR"), initial);
+}
+
+std::optional<FilamentSpool> pick_spool_for_tool(VirtualToolIndex tool, FilamentSpool initial) {
+    const ToolTitle vendor_title(tool, N_("%s VENDOR"));
+    const ToolTitle color_title(tool, N_("%s COLOR"));
+    return pick_spool(vendor_title.text(), color_title.text(), initial);
 }
 
 bool pick_spool_for_load(FilamentType type, std::variant<VirtualToolIndex, AllTools> tool, PreheatMode mode) {
@@ -154,21 +256,21 @@ bool pick_spool_for_load(FilamentType type, std::variant<VirtualToolIndex, AllTo
         return true;
     }
 
-    FilamentSpool spool = FilamentSpool::previous_for_tool(*virtual_tool);
-    while (true) {
-        const auto vendor = pick_vendor(_("VENDOR"), spool.vendor);
-        if (!vendor) {
-            return false;
-        }
-        spool.vendor = *vendor;
-
-        // Going back from the color returns to the vendor
-        if (const auto color = pick_color(_("COLOR"), spool.color)) {
-            spool.color = *color;
-            FilamentSpool::pick_for_load(*virtual_tool, type, spool);
-            return true;
-        }
+    const auto spool = pick_spool(FilamentSpool::previous_for_tool(*virtual_tool));
+    if (!spool) {
+        return false;
     }
+    FilamentSpool::pick_for_load(*virtual_tool, type, *spool);
+    return true;
+}
+
+void uppercase_title(std::span<char> text) {
+    const std::string_view view(text.data(), strnlen(text.data(), text.size()));
+    if (!std::ranges::all_of(view, [](char ch) { return static_cast<unsigned char>(ch) < 0x80; })) {
+        return;
+    }
+    // Only up to the terminator, as the bytes after it may be uninitialized
+    std::ranges::transform(view, text.begin(), [](char ch) { return static_cast<char>(toupper(ch)); });
 }
 
 } // namespace filament_library_dialog

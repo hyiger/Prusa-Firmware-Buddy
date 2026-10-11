@@ -772,10 +772,6 @@ void Pause::purge_process([[maybe_unused]] Response response) {
     planner.synchronize(); // Finish any pending moves before starting the purge
 
     const auto old_filament = config_store().get_filament_type(settings.virtual_tool());
-#if HAS_FILAMENT_SLOTS()
-    // Setting filament on an empty tool clears its spool, which a failed purge has to undo
-    const auto old_spool = FilamentSpool::previous_for_tool(settings.virtual_tool());
-#endif
     config_store().set_filament_type(settings.virtual_tool(), filament::get_type_to_load());
 
 #if HAS_NOZZLE_CLEANER()
@@ -786,7 +782,7 @@ void Pause::purge_process([[maybe_unused]] Response response) {
     if (!purge_ok) {
         config_store().set_filament_type(settings.virtual_tool(), old_filament);
 #if HAS_FILAMENT_SLOTS()
-        FilamentSpool::set_for_tool(settings.virtual_tool(), old_spool);
+        FilamentSpool::fail_load(settings.virtual_tool(), filament::get_type_to_load());
 #endif
         return;
     }

@@ -1,9 +1,8 @@
 #include "screen_filament_slots.hpp"
 #include "filament_library_dialog.hpp"
 #include "filament_swatch.hpp"
+#include "screen_filament_detail.hpp"
 
-#include <algorithm>
-#include <cctype>
 #include <cstdio>
 
 #include <algorithm_extensions.hpp>
@@ -13,6 +12,11 @@
 #include <marlin_client.hpp>
 #include <multi_filament_change.hpp>
 #include <utils/string_builder.hpp>
+
+#if HAS_ANFC()
+    #include <feature/openprinttag/utils.hpp>
+    #include <gui/screen/openprinttag/screen_opt_info.hpp>
+#endif
 
 namespace {
 
@@ -109,7 +113,7 @@ int MI_VENDOR::item_count() const {
 
 string_view_utf8 MI_VENDOR::build_item_text(int index, ItemTextParams &params) const {
     const FilamentVendor vendor = items_[index];
-    return vendor ? copy_name(vendor.name(), params) : _("None");
+    return vendor ? copy_name(vendor.name(), params) : _("No vendor");
 }
 
 bool MI_VENDOR::on_item_selected(const OnItemSelectedArgs &args) {
@@ -170,7 +174,7 @@ void MI_COLOR::set_tool(VirtualToolIndex tool) {
     name_ = color.name();
     color_ = color.color();
 
-    extension_width = filament_swatch::width_with_text(color_, color_ ? string_view_utf8::MakeRAM(name_.data()) : _("None"), filament_swatch::Arrow::yes);
+    extension_width = filament_swatch::width_with_text(color_, color_ ? string_view_utf8::MakeRAM(name_.data()) : _("No color"), filament_swatch::Arrow::yes);
     Invalidate();
 }
 
@@ -188,24 +192,43 @@ void MI_COLOR::click(IWindowMenu &menu) {
 }
 
 void MI_COLOR::printExtension(Rect16 extension_rect, Color color_text, Color color_back, ropfn raster_op) const {
-    filament_swatch::print_with_text(extension_rect, color_, color_ ? string_view_utf8::MakeRAM(name_.data()) : _("None"), color_text, color_back, raster_op, filament_swatch::Arrow::yes);
+    filament_swatch::print_with_text(extension_rect, color_, color_ ? string_view_utf8::MakeRAM(name_.data()) : _("No color"), color_text, color_back, raster_op, filament_swatch::Arrow::yes);
 }
+
+MI_DETAILS::MI_DETAILS()
+    : IWindowMenuItem(_("Filament Details"), nullptr, is_enabled_t::yes, is_hidden_t::no, expands_t::yes) {
+}
+
+void MI_DETAILS::set_tool(VirtualToolIndex tool) {
+    tool_ = tool;
+}
+
+void MI_DETAILS::click(IWindowMenu &) {
+#if HAS_ANFC()
+    Screens::Access()->Open(buddy::openprinttag::screen_opt_info_loaded_creator(tool_));
+#else
+    // The type can change on this screen, so it is read when opening the details
+    Screens::Access()->Open(ScreenFactory::ScreenWithArg<ScreenFilamentDetail>(EncodedFilamentType(FilamentType::for_tool(tool_))));
+#endif
+}
+
+#if HAS_ANFC()
+void MI_DETAILS::Loop() {
+    SetIconId(buddy::openprinttag::tool_tag_status_icon(tool_));
+}
+#endif
 
 } // namespace screen_filament_slot
 
 ScreenFilamentSlot::ScreenFilamentSlot(VirtualToolIndex tool)
     : screen_filament_slot::ScreenFilamentSlot_(string_view_utf8::MakeNULLSTR()) {
     StringBuilder(title_).append_string_view(tool.display_name(title_params_));
-
-    // Screen titles are upper case. A translated name with non-ASCII letters is left as it is,
-    // rather than upper-casing only some of its letters.
-    if (std::ranges::all_of(std::string_view(title_.data()), [](char ch) { return static_cast<unsigned char>(ch) < 0x80; })) {
-        std::ranges::transform(title_, title_.begin(), [](char ch) { return static_cast<char>(toupper(ch)); });
-    }
+    filament_library_dialog::uppercase_title(title_);
     header.SetText(string_view_utf8::MakeRAM(title_.data()));
 
     using namespace screen_filament_slot;
     Item<MI_VENDOR>().set_tool(tool);
     Item<MI_TYPE>().set_tool(tool);
     Item<MI_COLOR>().set_tool(tool);
+    Item<MI_DETAILS>().set_tool(tool);
 }

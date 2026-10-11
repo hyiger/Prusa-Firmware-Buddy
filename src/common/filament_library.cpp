@@ -239,7 +239,7 @@ static_assert(sizeof(PickedForLoad) == 4);
 /// Picked in the GUI, waiting for its load to start
 std::atomic<PickedForLoad> picked_for_load;
 
-/// Taken by the load in progress. Only the Marlin thread uses it.
+/// Taken by the last load that started. Only the Marlin thread uses it.
 PickedForLoad loading;
 
 } // namespace
@@ -267,21 +267,38 @@ void FilamentSpool::pick_for_load(VirtualToolIndex tool, FilamentType type, Fila
     picked_for_load = PickedForLoad { .tool = tool.to_raw(), .type = type, .spool = spool };
 }
 
+void FilamentSpool::drop_pick() {
+    picked_for_load = PickedForLoad {};
+}
+
 void FilamentSpool::start_load(FilamentType type) {
     const PickedForLoad picked = picked_for_load.exchange({});
     loading = picked.type == EncodedFilamentType(type) ? picked : PickedForLoad {};
 }
 
+namespace {
+
+bool is_loading(VirtualToolIndex tool, FilamentType type) {
+    return loading.tool == tool.to_raw() && loading.type == EncodedFilamentType(type);
+}
+
+} // namespace
+
 void FilamentSpool::finish_load(VirtualToolIndex tool, FilamentType type) {
-    const PickedForLoad picked = std::exchange(loading, {});
-    if (picked.tool != tool.to_raw() || picked.type != EncodedFilamentType(type)) {
+    if (!is_loading(tool, type)) {
         return;
     }
-    set_for_tool(tool, picked.spool);
+    set_for_tool(tool, loading.spool);
 
     // Shows the picked color when asking whether the color is correct
-    if (const auto color = picked.spool.color.color(); color && !filament::get_color_to_load()) {
+    if (const auto color = loading.spool.color.color(); color && !filament::get_color_to_load()) {
         filament::set_color_to_load(color);
+    }
+}
+
+void FilamentSpool::fail_load(VirtualToolIndex tool, FilamentType type) {
+    if (is_loading(tool, type) && FilamentType::for_tool(tool) == FilamentType::none) {
+        set_for_tool(tool, loading.spool);
     }
 }
 
