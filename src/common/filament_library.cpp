@@ -50,7 +50,8 @@ constexpr EnumArray<PresetFilamentColor, PresetColorInfo, PresetFilamentColor::_
     { PresetFilamentColor::yellow, { "Yellow", Color::from_raw(0xFFFF00) } },
     { PresetFilamentColor::black, { "Black", Color::from_raw(0x000000) } },
     { PresetFilamentColor::white, { "White", Color::from_raw(0xFFFFFF) } },
-    { PresetFilamentColor::orange, { "Orange", Color::from_raw(0xFFA500) } },
+    // The UI's orange: web orange (0xFFA500) looks yellow on the printer's display
+    { PresetFilamentColor::orange, { "Orange", Color::from_raw(0xF8651B) } },
     { PresetFilamentColor::brown, { "Brown", Color::from_raw(0x8B4513) } },
     { PresetFilamentColor::gray, { "Gray", Color::from_raw(0x808080) } },
     { PresetFilamentColor::purple, { "Purple", Color::from_raw(0x800080) } },
