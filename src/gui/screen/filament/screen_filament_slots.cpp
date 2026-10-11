@@ -107,7 +107,7 @@ int MI_VENDOR::item_count() const {
 
 string_view_utf8 MI_VENDOR::build_item_text(int index, ItemTextParams &params) const {
     const FilamentVendor vendor = items_[index];
-    return vendor ? copy_name(vendor.name(), params) : _("None");
+    return vendor ? copy_name(vendor.name(), params) : _("No vendor");
 }
 
 bool MI_VENDOR::on_item_selected(const OnItemSelectedArgs &args) {
@@ -168,7 +168,7 @@ void MI_COLOR::set_tool(VirtualToolIndex tool) {
     name_ = color.name();
     color_ = color.color();
 
-    extension_width = filament_swatch::width_with_text(color_, color_ ? string_view_utf8::MakeRAM(name_.data()) : _("None"), filament_swatch::Arrow::yes);
+    extension_width = filament_swatch::width_with_text(color_, color_ ? string_view_utf8::MakeRAM(name_.data()) : _("No color"), filament_swatch::Arrow::yes);
     Invalidate();
 }
 
@@ -186,7 +186,7 @@ void MI_COLOR::click(IWindowMenu &menu) {
 }
 
 void MI_COLOR::printExtension(Rect16 extension_rect, Color color_text, Color color_back, ropfn raster_op) const {
-    filament_swatch::print_with_text(extension_rect, color_, color_ ? string_view_utf8::MakeRAM(name_.data()) : _("None"), color_text, color_back, raster_op, filament_swatch::Arrow::yes);
+    filament_swatch::print_with_text(extension_rect, color_, color_ ? string_view_utf8::MakeRAM(name_.data()) : _("No color"), color_text, color_back, raster_op, filament_swatch::Arrow::yes);
 }
 
 } // namespace screen_filament_slot

@@ -101,7 +101,13 @@ namespace {
         if constexpr (std::is_same_v<Item, FilamentColor>) {
             swatch_ = item.color();
         }
-        SetLabel(item ? string_view_utf8::MakeRAM(name_.data()) : _("None"));
+        if (item) {
+            SetLabel(string_view_utf8::MakeRAM(name_.data()));
+        } else if constexpr (std::is_same_v<Item, FilamentColor>) {
+            SetLabel(_("No color"));
+        } else {
+            SetLabel(_("No vendor"));
+        }
     }
 
     template <typename Item>
