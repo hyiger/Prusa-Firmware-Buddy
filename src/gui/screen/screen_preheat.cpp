@@ -17,6 +17,11 @@
 #include <gui/standard_frame/frame_wait.hpp>
 #include <filament_to_load.hpp>
 
+#include <option/has_filament_slots.h>
+#if HAS_FILAMENT_SLOTS()
+    #include <gui/screen/filament/filament_library_dialog.hpp>
+#endif
+
 #if HAS_ANFC()
     #include <feature/openprinttag/tool_tag.hpp>
     #include <screen/openprinttag/screen_opt_filament_detail.hpp>
@@ -419,6 +424,12 @@ bool ScreenPreheat::handle_filament_selection(FilamentType filament_type, Prehea
         return false;
     }
 
+#if HAS_FILAMENT_SLOTS()
+    // In place of the color prompt: the pickers apply the picked color to the load the same way
+    if (should_ask_for_filament_color(mode) && !filament_library_dialog::pick_spool_for_load(filament_type, tool)) {
+        return false;
+    }
+#else
     if (should_ask_for_filament_color(mode)
         // Don't ask for adhoc filaments - for those it should already be prefilled
         && !filament_type.is_adhoc()
@@ -436,6 +447,7 @@ bool ScreenPreheat::handle_filament_selection(FilamentType filament_type, Prehea
 
         filament_type = filament::apply_load_color(filament_type, virtual_tool, *color_opt);
     }
+#endif
 
     marlin_client::FSM_response_variant(PhasesPreheat::user_temp_selection, FSMResponseVariant::make<FilamentType>(filament_type));
     return true;

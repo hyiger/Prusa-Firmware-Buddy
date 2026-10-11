@@ -50,6 +50,10 @@ static_assert(HAS_PAUSE());
 #include <config_store/store_instance.hpp>
 #include <raii/scope_guard.hpp>
 #include <filament_to_load.hpp>
+#include <option/has_filament_slots.h>
+#if HAS_FILAMENT_SLOTS()
+    #include <filament_library.hpp>
+#endif
 #include <common/marlin_client.hpp>
 #include <common/mapi/parking.hpp>
 #include <feature/ramming/ramming_sequence.hpp>
@@ -426,7 +430,12 @@ void Pause::mark_filament_as_loaded() {
     // Propagate the new filament back to type_to_load so that this function is idempotent
     // PD-9393
     const auto filament = config_store().set_filament_type(settings.virtual_tool(), filament::get_type_to_load());
-    filament::set_type_to_load(filament);
+    filament::update_type_to_load(filament);
+
+#if HAS_FILAMENT_SLOTS()
+    // The spool follows the type: it stays even if the purge then fails, as the type does
+    FilamentSpool::finish_load(settings.virtual_tool(), load_type != LoadType::load_purge);
+#endif
 }
 
 void Pause::start_process([[maybe_unused]] Response response) {

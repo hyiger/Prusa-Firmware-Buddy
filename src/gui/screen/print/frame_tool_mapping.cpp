@@ -18,6 +18,10 @@
 #include <multi_filament_change.hpp>
 #include <screen_menu_filament_changeall.hpp>
 #include <option/has_mmu2.h>
+#include <option/has_filament_slots.h>
+#if HAS_FILAMENT_SLOTS()
+    #include <filament_library.hpp>
+#endif
 #include <bsod/bsod.h>
 #include <gui/dialogs/dialog_menu_virtual.hpp>
 #include <gui_utils.hpp>
@@ -248,7 +252,11 @@ void ColumnItem::printExtension(Rect16 extension_rect, Color color_text, Color c
             .tool_name = string_view_utf8::MakeRAM(tool_name),
             .nozzle_diameter = CompactOptional<float, NAN> { config_store().get_nozzle_diameter(physical_tool) },
             .filament_name = filament_params.name,
+#if HAS_FILAMENT_SLOTS()
+            .color = FilamentSpool::display_color(*virtual_tool),
+#else
             .color = filament_params.color,
+#endif
         };
         break;
     }

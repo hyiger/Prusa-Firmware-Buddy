@@ -29,6 +29,10 @@
 
 #include <option/has_anfc.h>
 #include <bsod/bsod.h>
+#include <option/has_filament_slots.h>
+#if HAS_FILAMENT_SLOTS()
+    #include <filament_library.hpp>
+#endif
 #if HAS_ANFC()
     #include <feature/openprinttag/tool_tag.hpp>
     #include <feature/openprinttag/data_utils.hpp>
@@ -241,11 +245,17 @@ static FSMResponseVariant determine_filament_for_operation(const filament_gcodes
 }
 
 std::pair<std::optional<PreheatStatus::Result>, FilamentType> filament_gcodes::preheat(const FilamentSelectionArgs &preheat_data, PreheatBehavior preheat_arg) {
+#if HAS_FILAMENT_SLOTS()
+    FilamentSpool::discard_pick();
+#endif
     const FSMResponseVariant response = determine_filament_for_operation(preheat_data);
 
     const auto physical_tool = to_physical_tool_index<AllTools>(preheat_data.tool);
 
     if (response.holds_alternative<FilamentType>()) {
+#if HAS_FILAMENT_SLOTS()
+        FilamentSpool::accept_pick();
+#endif
         const FilamentType filament = response.value<FilamentType>();
         preheat_to(filament, physical_tool, preheat_arg);
         return { std::nullopt, filament };
