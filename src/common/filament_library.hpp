@@ -196,13 +196,18 @@ struct FilamentSpool {
 
     static void set_for_tool(VirtualToolIndex tool, FilamentSpool spool);
 
-    /// Remembers \p spool, picked in the GUI, for the coming load of \p type into \p tool.
-    /// Called from the GUI thread, before the load continues in the Marlin thread.
+    /// Remembers \p spool, picked in the GUI, for loading \p type into \p tool.
+    /// Called from the GUI thread, while the load waits for the user to pick the filament.
     static void pick_for_load(VirtualToolIndex tool, FilamentType type, FilamentSpool spool);
 
-    /// Assigns the spool picked for loading \p type into \p tool, if one was, once that load succeeded.
+    /// Called by the Marlin thread when a load starts with \p type, from filament::set_type_to_load.
+    /// Takes the spool picked for it, if any. A pick counts only for the load right after it, so a
+    /// pick left by a load that never started is dropped here.
+    static void start_load(FilamentType type);
+
+    /// Assigns the spool taken by start_load to \p tool, once loading \p type into it succeeded.
     /// Filament loaded without a pick, such as from G-code, ends up without a spool anyway, because
-    /// setting filament on an empty tool clears it. Purges without a load keep the spool.
+    /// setting filament on an empty tool clears it. A purge without a load keeps the spool.
     static void finish_load(VirtualToolIndex tool, FilamentType type);
 
     constexpr bool operator==(const FilamentSpool &) const = default;

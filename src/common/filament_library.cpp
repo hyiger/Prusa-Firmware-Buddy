@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <utility>
 #include <cctype>
 #include <cstdio>
 #include <cstring>
@@ -228,14 +229,18 @@ static_assert(FilamentVendor::all()[FilamentVendor::preset_count] == FilamentVen
 
 namespace {
 
-/// The spool picked in the GUI for the coming load, handed over to the Marlin thread
 struct PickedForLoad {
     uint8_t tool = 0xff;
     EncodedFilamentType type;
     FilamentSpool spool;
 };
 static_assert(sizeof(PickedForLoad) == 4);
+
+/// Picked in the GUI, waiting for its load to start
 std::atomic<PickedForLoad> picked_for_load;
+
+/// Taken by the load in progress. Only the Marlin thread uses it.
+PickedForLoad loading;
 
 } // namespace
 
@@ -262,8 +267,13 @@ void FilamentSpool::pick_for_load(VirtualToolIndex tool, FilamentType type, Fila
     picked_for_load = PickedForLoad { .tool = tool.to_raw(), .type = type, .spool = spool };
 }
 
-void FilamentSpool::finish_load(VirtualToolIndex tool, FilamentType type) {
+void FilamentSpool::start_load(FilamentType type) {
     const PickedForLoad picked = picked_for_load.exchange({});
+    loading = picked.type == EncodedFilamentType(type) ? picked : PickedForLoad {};
+}
+
+void FilamentSpool::finish_load(VirtualToolIndex tool, FilamentType type) {
+    const PickedForLoad picked = std::exchange(loading, {});
     if (picked.tool != tool.to_raw() || picked.type != EncodedFilamentType(type)) {
         return;
     }
