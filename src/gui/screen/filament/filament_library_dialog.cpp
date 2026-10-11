@@ -232,7 +232,8 @@ void uppercase_title(std::span<char> text) {
     if (!std::ranges::all_of(view, [](char ch) { return static_cast<unsigned char>(ch) < 0x80; })) {
         return;
     }
-    std::ranges::transform(text, text.begin(), [](char ch) { return static_cast<char>(toupper(ch)); });
+    // Only up to the terminator, as the bytes after it may be uninitialized
+    std::ranges::transform(view, text.begin(), [](char ch) { return static_cast<char>(toupper(ch)); });
 }
 
 } // namespace filament_library_dialog

@@ -31,7 +31,7 @@ std::optional<FilamentSpool> pick_spool(FilamentSpool initial);
 /// Like pick_spool, in dialogs titled with the name of \p tool
 std::optional<FilamentSpool> pick_spool_for_tool(VirtualToolIndex tool, FilamentSpool initial);
 
-/// Upper-cases \p text in place, as screen titles are, unless it has non-ASCII letters,
+/// Upper-cases the NUL-terminated \p text in place, as screen titles are, unless it has non-ASCII letters,
 /// which would end up only partly upper-cased
 void uppercase_title(std::span<char> text);
 
