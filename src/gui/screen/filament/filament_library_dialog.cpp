@@ -35,17 +35,29 @@ namespace {
         std::optional<Color> swatch_;
     };
 
+    /// "Don't load", for leaving a tool out when picking colors for several tools
+    template <typename Item>
+    class DontLoadItem final : public IWindowMenuItem {
+    public:
+        DontLoadItem()
+            : IWindowMenuItem(_("Don't load"), nullptr) {}
+
+    protected:
+        void click(IWindowMenu &menu) override;
+    };
+
     // The dialog lives on the stack, so the menu only reserves room for its own items
     template <typename Item>
     class DialogMenu final : public WindowMenuVirtualSized<WindowMenuVirtualBase::default_item_buffer_size, sizeof(DialogItem<Item>)> {
     public:
-        DialogMenu(window_t *parent, Rect16 rect, Item current);
+        DialogMenu(window_t *parent, Rect16 rect, Item current, bool offer_dont_load);
 
         int item_count() const final {
-            return items_.size() + 1;
+            return items_.size() + first_item_;
         }
 
         std::optional<Item> result;
+        bool dont_load = false;
 
     protected:
         void setup_item(typename DialogMenu::ItemVariant &variant, int index) final;
@@ -53,20 +65,27 @@ namespace {
     private:
         /// None, then the visible items, plus the current one if it is hidden
         stdext::inplace_vector<Item, Item::total_count + 1> items_;
+
+        /// Menu index of the first of items_: after Return, and after "Don't load" when offered
+        uint8_t first_item_;
     };
 
     template <typename Item>
     class Dialog final : public IDialog {
     public:
-        Dialog(const string_view_utf8 &title, Item current)
+        Dialog(const string_view_utf8 &title, Item current, bool offer_dont_load = false)
             : IDialog(GuiDefaults::RectScreen)
             , header_(this, title)
-            , menu_(this, GuiDefaults::RectScreenNoHeader, current) {
+            , menu_(this, GuiDefaults::RectScreenNoHeader, current, offer_dont_load) {
             CaptureNormalWindow(menu_);
         }
 
         std::optional<Item> result() const {
             return menu_.menu.result;
+        }
+
+        bool dont_load() const {
+            return menu_.menu.dont_load;
         }
 
     private:
@@ -99,8 +118,15 @@ namespace {
     }
 
     template <typename Item>
-    DialogMenu<Item>::DialogMenu(window_t *parent, Rect16 rect, Item current)
-        : WindowMenuVirtualSized<WindowMenuVirtualBase::default_item_buffer_size, sizeof(DialogItem<Item>)>(parent, rect, WindowMenuVirtualBase::CloseScreenReturnBehavior::yes) {
+    void DontLoadItem<Item>::click(IWindowMenu &menu) {
+        static_cast<DialogMenu<Item> &>(menu).dont_load = true;
+        Screens::Access()->Close();
+    }
+
+    template <typename Item>
+    DialogMenu<Item>::DialogMenu(window_t *parent, Rect16 rect, Item current, bool offer_dont_load)
+        : WindowMenuVirtualSized<WindowMenuVirtualBase::default_item_buffer_size, sizeof(DialogItem<Item>)>(parent, rect, WindowMenuVirtualBase::CloseScreenReturnBehavior::yes)
+        , first_item_(offer_dont_load ? 2 : 1) {
         items_.push_back({});
         for (const auto item : Item::all()) {
             if (item.is_visible() || item == current) {
@@ -108,17 +134,17 @@ namespace {
             }
         }
         this->setup_items();
-
-        // +1 for the return item
-        this->move_focus_to_index(stdext::index_of(items_, current) + 1);
+        this->move_focus_to_index(stdext::index_of(items_, current) + first_item_);
     }
 
     template <typename Item>
     void DialogMenu<Item>::setup_item(typename DialogMenu::ItemVariant &variant, int index) {
         if (index == 0) {
             variant.template emplace<MI_RETURN>();
+        } else if (index < first_item_) {
+            variant.template emplace<DontLoadItem<Item>>();
         } else {
-            variant.template emplace<DialogItem<Item>>(items_[index - 1]);
+            variant.template emplace<DialogItem<Item>>(items_[index - first_item_]);
         }
     }
 
@@ -185,9 +211,14 @@ namespace {
 
 } // namespace
 
-std::optional<FilamentColor> pick_color_for_tool(VirtualToolIndex tool, FilamentColor current) {
+std::optional<ColorOrDontLoad> pick_color_for_tool(VirtualToolIndex tool, FilamentColor current) {
     const ToolTitle title(tool, N_("%s COLOR"));
-    return pick_color(title.text(), current);
+    Dialog<FilamentColor> dialog(title.text(), current, true);
+    Screens::Access()->gui_loop_until_dialog_closed();
+    if (dialog.dont_load()) {
+        return DontLoad {};
+    }
+    return dialog.result();
 }
 
 std::optional<FilamentSpool> pick_spool(FilamentSpool initial) {

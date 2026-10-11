@@ -209,34 +209,59 @@ bool MI_ActionSelect::pick_spools_for_all(Config &config, IWindowMenu &menu) {
         return true;
     }
 
-    // The vendor list starts at the first tool's previous vendor
-    const auto vendor = filament_library_dialog::pick_vendor(_("VENDOR"), FilamentSpool::previous_for_tool(*tools).vendor);
-    if (!vendor) {
-        restore_focus();
-        return false;
-    }
-
-    // Going back from a tool's color stops asking, and the remaining tools keep their previous colors
-    bool asking = true;
-    for (const auto tool : tools) {
-        auto &item = config[tool];
-        if (item.action != Action::change) {
-            continue;
+    while (true) {
+        // The vendor list starts at the first tool's previous vendor
+        const auto vendor = filament_library_dialog::pick_vendor(_("VENDOR"), FilamentSpool::previous_for_tool(*tools).vendor);
+        if (!vendor) {
+            restore_focus();
+            return false;
         }
 
-        FilamentColor color = FilamentSpool::previous_for_tool(tool).color;
-        if (asking) {
-            if (const auto picked = filament_library_dialog::pick_color_for_tool(tool, color)) {
-                color = *picked;
+        Config picked = config;
+        bool asked = false;
+        bool leave_out_rest = false;
+        bool back_to_vendor = false;
+        for (const auto tool : tools) {
+            auto &item = picked[tool];
+            if (item.action != Action::change) {
+                continue;
+            }
+            const auto leave_out = [&item] {
+                item = ConfigItem { .color = item.color };
+            };
+
+            if (leave_out_rest) {
+                leave_out();
+                continue;
+            }
+
+            const auto color = filament_library_dialog::pick_color_for_tool(tool, FilamentSpool::previous_for_tool(tool).color);
+            if (!color) {
+                // Going back from the first color returns to the vendor. From a later one, it leaves
+                // that tool and the remaining ones out.
+                if (!asked) {
+                    back_to_vendor = true;
+                    break;
+                }
+                leave_out_rest = true;
+                leave_out();
+                continue;
+            }
+
+            asked = true;
+            if (std::holds_alternative<filament_library_dialog::DontLoad>(*color)) {
+                leave_out();
             } else {
-                asking = false;
+                item.spool = FilamentSpool { .vendor = *vendor, .color = std::get<FilamentColor>(*color) };
             }
         }
-        item.spool = FilamentSpool { .vendor = *vendor, .color = color };
-    }
 
-    restore_focus();
-    return true;
+        if (!back_to_vendor) {
+            config = picked;
+            restore_focus();
+            return true;
+        }
+    }
 }
 
 void MI_ActionSelect::printIcon(Rect16 icon_rect, ropfn raster_op, Color color_back) const {

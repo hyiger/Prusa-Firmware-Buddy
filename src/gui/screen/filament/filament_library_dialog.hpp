@@ -21,8 +21,14 @@ std::optional<FilamentVendor> pick_vendor(const string_view_utf8 &title, Filamen
 /// Lets the user pick None or a color, each shown with its swatch, like pick_vendor
 std::optional<FilamentColor> pick_color(const string_view_utf8 &title, FilamentColor current);
 
-/// Like pick_color, in a dialog titled with the name of \p tool
-std::optional<FilamentColor> pick_color_for_tool(VirtualToolIndex tool, FilamentColor current);
+/// Picked to leave a tool out
+struct DontLoad {};
+
+using ColorOrDontLoad = std::variant<FilamentColor, DontLoad>;
+
+/// Like pick_color, for one of several tools to be loaded: titled with the name of \p tool, and with
+/// "Don't load" at the top for leaving the tool out
+std::optional<ColorOrDontLoad> pick_color_for_tool(VirtualToolIndex tool, FilamentColor current);
 
 /// Asks for a vendor and then a color, starting at \p initial. Going back from the color returns to the vendor.
 /// \returns std::nullopt if the user went back from the vendor
