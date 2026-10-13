@@ -197,7 +197,7 @@ jobs:
 
           There are 16 preset vendors (Generic, Prusament, Polymaker, Bambu Lab, eSun, Elegoo, Sunlu, Overture, Hatchbox, Inland, 3D-Fuel, Fillamentum, Fiberlogy, Spectrum, Extrudr, colorFabb) and 16 preset colors (Red, Green, Blue, Cyan, Magenta, Yellow, Black, White, Orange, Brown, Gray, Purple, Pink, Silver, Natural, Gold), plus 8 user slots for each. Filament > Manage Filaments has Edit Vendors and Edit Colors to name the user slots and set the hex code of a user color, and Enable Vendors and Enable Colors to choose which entries the lists show.
 
-          PrusaLink reports the slots at `/api/v1/tools`, with the same credentials as its other requests, and `M866 T<tool> V"<vendor>" C"<color>"` sets them from G-code.
+          PrusaLink reports the slots at `/api/v1/tools`, with the same credentials as its other requests, and `M866 T<tool> V"<vendor>" C"<color>"` sets them from G-code. PrusaSlicer Filament Edition 1.16.0 and later read them with Sync Filaments from Printer, which currently works only over PrusaLink, not over Prusa Connect. Setup steps with screenshots are in the [Filament Slots and Sync user guide](https://github.com/hyiger/PrusaSlicer/wiki/Filament-Slots-and-Sync).
 
           ### Prusa Connect
 
