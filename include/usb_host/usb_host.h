@@ -13,6 +13,20 @@ bool is_media_inserted_since_startup();
 
 // In case media is invalid, this will disable it until reconnection
 void disable_media();
+
+/// \returns whether a USB drive is connected, including one disabled by disable_media()
+bool is_drive_connected();
+
+/// Makes a drive disabled by disable_media() available again, once a format has given it a supported file
+/// system. Call it between begin_format() and end_format().
+void enable_media();
+
+/// Keeps the volume mounted while the drive is formatted, even if the drive disconnects meanwhile. A drive
+/// that connects is mounted once the format has ended.
+/// \returns false if no drive is connected or another format is running
+bool begin_format();
+void end_format();
+bool is_formatting();
 } // namespace usb_host
 
 namespace usbh_power_cycle {

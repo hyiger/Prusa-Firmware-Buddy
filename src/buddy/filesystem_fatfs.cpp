@@ -18,6 +18,16 @@
 
 LOG_COMPONENT_REF(FileSystem);
 
+// A format holds the volume's lock for up to minutes. PrusaLink serves requests on the network thread, so
+// failing at once beats stalling all networking until the format ends.
+static bool refuse_while_formatting(struct _reent *r) {
+    if (usb_host::is_formatting()) {
+        r->_errno = EBUSY;
+        return true;
+    }
+    return false;
+}
+
 #define FAT_MAX_FILES         268435437
 #define FAT_MAX_FILES_PER_DIR 65534
 
@@ -212,6 +222,9 @@ static FILINFO get_fatfs_time(
 #endif
 
 static int open_r(struct _reent *r, void *fileStruct, const char *path, int flags, __attribute__((unused)) int mode) {
+    if (refuse_while_formatting(r)) {
+        return -1;
+    }
     PREPARE_FIL_EX(f, static_cast<FIL_EX *>(fileStruct));
     FRESULT result;
 
@@ -393,6 +406,9 @@ static off_t seek_r(struct _reent *r, void *fileStruct, off_t pos, int dir) {
 }
 
 static int stat_r(struct _reent *r, const char *path, struct stat *st) {
+    if (refuse_while_formatting(r)) {
+        return -1;
+    }
     FRESULT result;
     FILINFO finfo;
     memset(&finfo, 0, sizeof(FILINFO));
@@ -467,6 +483,9 @@ static int link_r(struct _reent *r, __attribute__((unused)) const char *existing
 }
 
 static int unlink_r(struct _reent *r, const char *path) {
+    if (refuse_while_formatting(r)) {
+        return -1;
+    }
     FRESULT result;
 
     if (IS_EMPTY(path)) {
@@ -487,6 +506,9 @@ static int unlink_r(struct _reent *r, const char *path) {
 }
 
 static int chdir_r(struct _reent *r, const char *path) {
+    if (refuse_while_formatting(r)) {
+        return -1;
+    }
     FRESULT result;
 
     if (IS_EMPTY(path)) {
@@ -507,6 +529,9 @@ static int chdir_r(struct _reent *r, const char *path) {
 }
 
 static int rename_r(struct _reent *r, const char *oldName, const char *newName) {
+    if (refuse_while_formatting(r)) {
+        return -1;
+    }
     FRESULT result;
 
     if (IS_EMPTY(oldName) || IS_EMPTY(newName)) {
@@ -569,6 +594,9 @@ static int fchmod_r(struct _reent *r, __attribute__((unused)) void *fileStruct, 
 }
 
 static int mkdir_r(struct _reent *r, const char *path, int mode) {
+    if (refuse_while_formatting(r)) {
+        return -1;
+    }
     FRESULT result;
     int errno;
 
@@ -601,6 +629,9 @@ static int mkdir_r(struct _reent *r, const char *path, int mode) {
 }
 
 static DIR_ITER *diropen_r(struct _reent *r, DIR_ITER *dirState, const char *path) {
+    if (refuse_while_formatting(r)) {
+        return NULL;
+    }
     FRESULT result;
 
     if (IS_EMPTY(path)) {
@@ -621,6 +652,9 @@ static DIR_ITER *diropen_r(struct _reent *r, DIR_ITER *dirState, const char *pat
 }
 
 static int dirreset_r(struct _reent *r, DIR_ITER *dirState) {
+    if (refuse_while_formatting(r)) {
+        return -1;
+    }
     FRESULT result;
 
     result = f_rewinddir(static_cast<DIR *>(dirState->dirStruct));
@@ -630,6 +664,9 @@ static int dirreset_r(struct _reent *r, DIR_ITER *dirState) {
 }
 
 static int dirnext_r(struct _reent *r, DIR_ITER *dirState, char *filename, struct stat *filestat) {
+    if (refuse_while_formatting(r)) {
+        return -1;
+    }
     FRESULT result;
     FILINFO fno;
 
@@ -683,6 +720,9 @@ static int dirclose_r(struct _reent *r, DIR_ITER *dirState) {
 }
 
 static int statvfs_r(struct _reent *r, const char *path, struct statvfs *buf) {
+    if (refuse_while_formatting(r)) {
+        return -1;
+    }
     FRESULT result;
     FATFS *ff;
     DWORD free_clst;

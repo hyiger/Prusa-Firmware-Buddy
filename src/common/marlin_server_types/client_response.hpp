@@ -426,15 +426,29 @@ enum class PhasesColdPull : PhaseUnderlyingType {
     load_ptfe,
     #endif
     prepare_filament,
+    #if HAS_INDX()
+    flush,
+    purge_ready,
+    purge,
+    tip_check,
+    pack,
+    pull_ready,
+    #endif
     #if HAS_AUTO_RETRACT()
     deretract,
     #endif
     blank_load,
     blank_unload,
     cool_down,
+    #if HAS_INDX()
+    cooling_dwell,
+    #endif
     heat_up,
     automatic_pull,
     manual_pull,
+    #if HAS_INDX()
+    dock,
+    #endif
     cleanup,
     pull_done,
     finish,
@@ -804,19 +818,42 @@ inline constexpr PhaseResponses ColdPullResponses[] = {
     { Response::Abort }, // stop_mmu,
     #endif
     #if HAS_TOOLCHANGER() || HAS_MMU2()
+        #if HAS_INDX()
+    { Response::Continue, Response::Abort }, // unload_ptfe,
+    { Response::Continue, Response::Abort }, // load_ptfe (not entered by the INDX workflow),
+        #else
     { Response::Unload, Response::Continue, Response::Abort }, // unload_ptfe,
     { Response::Load, Response::Continue, Response::Abort }, // load_ptfe,
+        #endif
     #endif
+    #if HAS_INDX()
+    { Response::Continue, Response::Abort }, // prepare_filament,
+    #else
     { Response::Unload, Response::Load, Response::Continue, Response::Abort }, // prepare_filament,
+    #endif
+    #if HAS_INDX()
+    { Response::Abort }, // flush,
+    { Response::Continue, Response::Abort }, // purge_ready,
+    { Response::Abort }, // purge,
+    { Response::Continue, Response::Abort }, // tip_check,
+    { Response::Abort }, // pack,
+    { Response::Continue, Response::Abort }, // pull_ready,
+    #endif
     #if HAS_AUTO_RETRACT()
     { Response::Abort }, // deretract
     #endif
     {}, // blank_load
     {}, // blank_unload
     { Response::Abort }, // cool_down,
+    #if HAS_INDX()
+    { Response::Abort }, // cooling_dwell,
+    #endif
     { Response::Abort }, // heat_up,
     {}, // automatic_pull,
     { Response::Continue }, // manual_pull,
+    #if HAS_INDX()
+    {}, // dock,
+    #endif
     { Response::Abort }, // cleanup (restart_mmu),
     { Response::Finish }, // pull_done,
     {}, // finish,

@@ -304,6 +304,10 @@ bool GcodeSuite::process_parsed_command_custom(bool no_ok) {
             break;
 #endif
 
+        case 1706:
+            PrusaGcodeSuite::M1706();
+            break;
+
 #if HAS_INPUT_SHAPER_CALIBRATION()
         case 1959:
             PrusaGcodeSuite::M1959();

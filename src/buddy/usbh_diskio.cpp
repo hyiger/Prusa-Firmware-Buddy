@@ -177,6 +177,11 @@ static USBH_StatusTypeDef USBH_MSC_GetLUNInfo_synchronized(
  * @retval DRESULT: Operation result
  */
 DRESULT USBH_read(BYTE lun, BYTE *buff, DWORD sector, UINT count) {
+    // A volume left mounted while the drive is gone fails here, before a failed request restarts the USB port.
+    if (!usb_host::is_drive_connected()) {
+        return RES_NOTRDY;
+    }
+
     DRESULT res = RES_ERROR;
     MSC_LUNTypeDef info;
     USBH_StatusTypeDef status = USBH_OK;
@@ -225,6 +230,11 @@ DRESULT USBH_read(BYTE lun, BYTE *buff, DWORD sector, UINT count) {
  */
 #if FF_FS_READONLY == 0
 DRESULT USBH_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count) {
+    // A volume left mounted while the drive is gone fails here, before a failed request restarts the USB port.
+    if (!usb_host::is_drive_connected()) {
+        return RES_NOTRDY;
+    }
+
     DRESULT res = RES_ERROR;
     MSC_LUNTypeDef info;
     USBH_StatusTypeDef status = USBH_OK;
