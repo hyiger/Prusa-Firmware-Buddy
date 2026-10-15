@@ -165,6 +165,10 @@ namespace {
             .y = static_cast<float>(Y_CENTER),
             .z = mapi::ParkingPosition::Relative { .delta = 20.f },
         });
+        // A motion fault while homing or parking leaves the tool somewhere unknown.
+        if (planner.draining()) {
+            return PhasesColdPull::cleanup;
+        }
         #endif
         return PhasesColdPull::unload_ptfe;
     }
@@ -449,6 +453,12 @@ namespace {
     #endif
         }();
         marlin_server::call_manually::set_temp_to_display(cold_temp, *active_tool); // still show target temperature
+    #if HAS_INDX()
+        // The real target is already zero and won't change again, so clear the shown one however this ends.
+        ScopeGuard clear_shown_target([active_tool]() {
+            marlin_server::call_manually::set_temp_to_display(0, *active_tool);
+        });
+    #endif
 
         auto too_hot = [active_tool, cold_temp]() {
             return static_cast<uint16_t>(Temperature::degHotend(*active_tool)) > cold_temp;
@@ -489,7 +499,6 @@ namespace {
         cold_pull::TemperatureProgressData complete { { 0 } };
         complete.percent = 100;
         marlin_server::fsm_change(PhasesColdPull::cool_down, complete.fsm_data);
-        marlin_server::call_manually::set_temp_to_display(0, *active_tool);
         return PhasesColdPull::cooling_dwell;
     #else
         return PhasesColdPull::heat_up;
