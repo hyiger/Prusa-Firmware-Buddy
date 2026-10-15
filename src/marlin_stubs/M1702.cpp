@@ -1,5 +1,6 @@
 #include <option/has_coldpull.h>
 #include <option/has_gui.h>
+#include <option/has_indx.h>
 
 #include <M70X.hpp>
 #include <fs_autoload_autolock.hpp>
@@ -35,6 +36,11 @@
     #include <module/prusa/toolchanger.h>
 #endif
 
+#if HAS_INDX()
+    #include <mapi/parking.hpp>
+    #include <nozzle_cleaner.hpp>
+#endif
+
 #include <optional>
 #include <bsod/bsod.h>
 
@@ -55,6 +61,8 @@ namespace {
     constexpr const uint16_t INDX_PACK_TARGET_TEMP { 180 };
     constexpr const uint16_t INDX_COOL_TEMP { 60 };
     constexpr const uint16_t INDX_PULL_TEMP { 80 };
+    // Softens PLA residue so the wiper takes it off instead of dragging cold strings.
+    constexpr const uint16_t INDX_WIPE_TEMP { 170 };
     #endif
 
     constexpr const millis_t TIMEOUT_DISABLED { 0 };
@@ -101,6 +109,11 @@ namespace {
         return Response::_none;
     }
 
+    /// Heats the picked tool to @p target_hotend_temp and waits for @p reached_temp, by default the target the
+    /// heater accepted, which is clamped below the hotend's maximum.
+    /// @return false on abort
+    bool heat_up(uint16_t target_hotend_temp, PhasesColdPull current_phase, std::optional<uint16_t> reached_temp = std::nullopt);
+
     PhasesColdPull info() {
         switch (wait_for_response(PhasesColdPull::introduction)) {
         case Response::Stop:
@@ -132,8 +145,13 @@ namespace {
     }
 
     PhasesColdPull pick_tool() {
-        tool_change(selected_tool, tool_return_t::no_return, tool_change_lift_t::full_lift, 1);
+        [[maybe_unused]] const bool picked = tool_change(selected_tool, tool_return_t::no_return, tool_change_lift_t::full_lift, 1);
         #if HAS_INDX()
+        // Every later step heats and moves this tool's extruder.
+        if (!picked) {
+            return PhasesColdPull::cleanup;
+        }
+
         // A remembered auto-retract would cause the planner to reinterpret the
         // deliberate cold-pull extrusion moves. This procedure establishes a
         // new physical filament state, so invalidate the remembered value.
@@ -270,7 +288,10 @@ namespace {
     }
 
     #if HAS_INDX()
-    bool heat_up(const uint16_t target_hotend_temp, PhasesColdPull current_phase);
+    /// An Abort pressed during a move; the next phase change would discard it.
+    bool abort_requested(PhasesColdPull phase) {
+        return marlin_server::get_response_from_phase(phase) == Response::Abort;
+    }
 
     bool delay_abortable(PhasesColdPull phase, millis_t duration) {
         const millis_t deadline = millis() + duration;
@@ -280,7 +301,24 @@ namespace {
     }
 
     PhasesColdPull flush() {
-        if (!heat_up(INDX_FLUSH_TEMP, PhasesColdPull::flush)) {
+        return heat_up(INDX_FLUSH_TEMP, PhasesColdPull::flush) ? PhasesColdPull::purge_ready : PhasesColdPull::cleanup;
+    }
+
+    // The screen and the nozzle can't be watched at once, so tell the user what to look for before purging.
+    PhasesColdPull purge_ready() {
+        switch (wait_for_response(PhasesColdPull::purge_ready)) {
+        case Response::Continue:
+            return PhasesColdPull::purge;
+        case Response::Abort:
+            return PhasesColdPull::cleanup;
+        default:
+            bsod_unreachable();
+        }
+    }
+
+    PhasesColdPull purge() {
+        // Prompts wait without limit, and the safety timer turns the heater off after a while.
+        if (!heat_up(INDX_FLUSH_TEMP, PhasesColdPull::purge)) {
             return PhasesColdPull::cleanup;
         }
 
@@ -288,7 +326,7 @@ namespace {
         for (uint8_t i = 0; i < 3; ++i) {
             mapi::extruder_move(20, 2);
             planner.synchronize();
-            if (i != 2 && !delay_abortable(PhasesColdPull::flush, 2000)) {
+            if (abort_requested(PhasesColdPull::purge) || (i != 2 && !delay_abortable(PhasesColdPull::purge, 2000))) {
                 return PhasesColdPull::cleanup;
             }
         }
@@ -307,12 +345,18 @@ namespace {
     }
 
     PhasesColdPull pack() {
+        // Pack from the flush temperature, even after a long wait at the tip check.
+        if (!heat_up(INDX_FLUSH_TEMP, PhasesColdPull::pack)) {
+            return PhasesColdPull::cleanup;
+        }
         thermalManager.setTargetHotend(INDX_PACK_TARGET_TEMP, selected_tool);
+        // The last pushes can come close to the minimum extrusion temperature on the way down.
+        mapi::ColdExtrudeGuard cold_extrude_guard;
         BlockEStallDetection estall_blocker;
         for (uint8_t i = 0; i < 8; ++i) {
             mapi::extruder_move(2, 1);
             planner.synchronize();
-            if (i != 7 && !delay_abortable(PhasesColdPull::pack, 5000)) {
+            if (abort_requested(PhasesColdPull::pack) || (i != 7 && !delay_abortable(PhasesColdPull::pack, 5000))) {
                 return PhasesColdPull::cleanup;
             }
         }
@@ -397,7 +441,7 @@ namespace {
         marlin_server::call_manually::set_temp_to_display(cold_temp, *active_tool); // still show target temperature
 
         auto too_hot = [active_tool, cold_temp]() {
-            return Temperature::degHotend(*active_tool) > cold_temp;
+            return static_cast<uint16_t>(Temperature::degHotend(*active_tool)) > cold_temp;
         };
 
         auto progress = [active_tool, cold_temp](const millis_t time_left) {
@@ -467,22 +511,23 @@ namespace {
     }
     #endif
 
-    bool heat_up(const uint16_t target_hotend_temp, PhasesColdPull current_phase) {
+    bool heat_up(const uint16_t target_hotend_temp, PhasesColdPull current_phase, std::optional<uint16_t> reached_temp) {
         auto active_tool = stdext::get_optional<PhysicalToolIndex>(PhysicalToolIndex::currently_selected());
         if (!active_tool.has_value()) {
             bsod_unreachable();
         }
 
         thermalManager.setTargetHotend(target_hotend_temp, *active_tool);
+        const uint16_t wait_temp = reached_temp.value_or(Temperature::degTargetHotend(*active_tool));
 
-        auto too_cold = [active_tool]() {
-            return static_cast<uint16_t>(Temperature::degHotend(*active_tool)) < Temperature::degTargetHotend(*active_tool);
+        auto too_cold = [active_tool, wait_temp]() {
+            return static_cast<uint16_t>(Temperature::degHotend(*active_tool)) < wait_temp;
         };
 
         auto progress = [&](millis_t) {
             cold_pull::TemperatureProgressData data { { 0 } };
             data.percent = static_cast<uint8_t>(
-                100.0f * Temperature::degHotend(*active_tool) / Temperature::degTargetHotend(*active_tool));
+                std::min(100.0f, 100.0f * Temperature::degHotend(*active_tool) / wait_temp));
             marlin_server::fsm_change(current_phase, data.fsm_data);
         };
 
@@ -497,6 +542,14 @@ namespace {
 
         return true;
     }
+
+    #if HAS_INDX()
+    /// Aimed straight at the pull temperature, the PID (not tuned this low) overshoots and takes about 30 s to
+    /// settle. Stop the first stage just short, so the momentum bleeds off, then close the last degrees.
+    bool heat_up_for_pull(PhasesColdPull phase) {
+        return heat_up(INDX_PULL_TEMP - 3, phase, INDX_PULL_TEMP - 4) && heat_up(INDX_PULL_TEMP, phase);
+    }
+    #endif
 
     #if HAS_AUTO_RETRACT()
     PhasesColdPull deretract() {
@@ -522,12 +575,12 @@ namespace {
 
     PhasesColdPull automatic_pull() {
         const auto virtual_tool = std::get<VirtualToolIndex>(VirtualToolIndex::currently_selected());
-        const auto physical_tool = virtual_tool.to_physical();
 
     #if HAS_INDX()
-        thermalManager.setTargetHotend(INDX_PULL_TEMP, physical_tool);
+        // The prompt before the pull waits without limit: a plug that cooled back down could snap or strain the drive.
+        heat_up_for_pull(PhasesColdPull::automatic_pull);
     #else
-        thermalManager.setTargetHotend(HOTEND_END_TEMP, physical_tool);
+        thermalManager.setTargetHotend(HOTEND_END_TEMP, virtual_tool.to_physical());
     #endif
 
         {
@@ -552,6 +605,7 @@ namespace {
     #if HAS_INDX()
             // Let the user remove the pulled filament without releasing XYZ.
             disable_e_steppers();
+            thermalManager.disable_hotend();
     #endif
 
             // mark filament unloaded
@@ -573,8 +627,26 @@ namespace {
             bsod_unreachable();
         }
 
+    #if HAS_INDX()
+        return PhasesColdPull::dock;
+    #else
+        return PhasesColdPull::cleanup;
+    #endif
+    }
+
+    #if HAS_INDX()
+    PhasesColdPull dock() {
+        // The heater goes off before the wipe; residual heat carries the few seconds of wipe and dock.
+        heat_up(INDX_WIPE_TEMP, PhasesColdPull::dock);
+        thermalManager.disable_hotend();
+
+        // As at the end of a print: wipe, park, dock.
+        nozzle_cleaner::load_and_execute(nozzle_cleaner::Sequence::clean);
+        mapi::park(mapi::get_parking_position(mapi::ParkPosition::park).without_z_move());
+        tool_change(NoTool {}, tool_return_t::no_return);
         return PhasesColdPull::cleanup;
     }
+    #endif
 
     PhasesColdPull pull_done() {
         switch (wait_for_response(PhasesColdPull::pull_done)) {
@@ -612,6 +684,10 @@ namespace {
     #if HAS_INDX()
         case PhasesColdPull::flush:
             return flush();
+        case PhasesColdPull::purge_ready:
+            return purge_ready();
+        case PhasesColdPull::purge:
+            return purge();
         case PhasesColdPull::tip_check:
             return tip_check();
         case PhasesColdPull::pack:
@@ -642,7 +718,7 @@ namespace {
     #endif
         case PhasesColdPull::heat_up:
     #if HAS_INDX()
-            return heat_up(INDX_PULL_TEMP, PhasesColdPull::heat_up) ? PhasesColdPull::pull_ready : PhasesColdPull::cleanup;
+            return heat_up_for_pull(PhasesColdPull::heat_up) ? PhasesColdPull::pull_ready : PhasesColdPull::cleanup;
     #else
             return heat_up(HOTEND_PULL_TEMP, PhasesColdPull::heat_up) ? PhasesColdPull::automatic_pull : PhasesColdPull::cleanup;
     #endif
@@ -650,9 +726,15 @@ namespace {
             return automatic_pull();
         case PhasesColdPull::manual_pull:
             return manual_pull();
+    #if HAS_INDX()
+        case PhasesColdPull::dock:
+            return dock();
+    #endif
         case PhasesColdPull::cleanup:
     #if HAS_MMU2()
             return cleanup();
+    #elif HAS_INDX()
+            return was_success ? PhasesColdPull::pull_done : PhasesColdPull::finish;
     #else
             return PhasesColdPull::finish;
     #endif

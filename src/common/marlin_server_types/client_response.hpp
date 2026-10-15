@@ -428,6 +428,8 @@ enum class PhasesColdPull : PhaseUnderlyingType {
     prepare_filament,
     #if HAS_INDX()
     flush,
+    purge_ready,
+    purge,
     tip_check,
     pack,
     pull_ready,
@@ -444,6 +446,9 @@ enum class PhasesColdPull : PhaseUnderlyingType {
     heat_up,
     automatic_pull,
     manual_pull,
+    #if HAS_INDX()
+    dock,
+    #endif
     cleanup,
     pull_done,
     finish,
@@ -828,6 +833,8 @@ inline constexpr PhaseResponses ColdPullResponses[] = {
     #endif
     #if HAS_INDX()
     { Response::Abort }, // flush,
+    { Response::Continue, Response::Abort }, // purge_ready,
+    { Response::Abort }, // purge,
     { Response::Continue, Response::Abort }, // tip_check,
     { Response::Abort }, // pack,
     { Response::Continue, Response::Abort }, // pull_ready,
@@ -844,6 +851,9 @@ inline constexpr PhaseResponses ColdPullResponses[] = {
     { Response::Abort }, // heat_up,
     {}, // automatic_pull,
     { Response::Continue }, // manual_pull,
+    #if HAS_INDX()
+    {}, // dock,
+    #endif
     { Response::Abort }, // cleanup (restart_mmu),
     { Response::Finish }, // pull_done,
     {}, // finish,

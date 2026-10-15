@@ -125,7 +125,7 @@ namespace frame {
     class Introduction final : public TextFrame {
     public:
         explicit Introduction(window_t *parent)
-            : TextFrame(parent, _("INDX cold pull"), _("Guided hot flush, packing, deep cooling and motorized pull. Stay at the printer throughout.")) {}
+            : TextFrame(parent, _("INDX cold pull"), _("Unload the tool's filament first. Have light-colored PLA ready, and stay at the printer until the plug is pulled out.")) {}
     };
 #else
     class Introduction final {
@@ -237,7 +237,7 @@ namespace frame {
     class Flush final : public ProgressFrame {
     public:
         explicit Flush(window_t *parent)
-            : ProgressFrame(parent, _("Heating and flushing"), _("Please wait. Hot PLA will leave the nozzle.")) {}
+            : ProgressFrame(parent, _("Heating up the nozzle"), _("Next, PLA is flushed through the nozzle.")) {}
 
         void update(fsm::PhaseData fsm_data) {
             const cold_pull::TemperatureProgressData data { fsm_data };
@@ -247,10 +247,22 @@ namespace frame {
         static_assert(common_frames::is_update_callable<Flush>);
     };
 
+    class PurgeReady final : public TextFrame {
+    public:
+        explicit PurgeReady(window_t *parent)
+            : TextFrame(parent, _("Flush next"), _("Watch the nozzle tip: melted PLA should flow out. Continue to start.")) {}
+    };
+
+    class Purge final : public TextFrame {
+    public:
+        explicit Purge(window_t *parent)
+            : TextFrame(parent, _("Flushing"), _("Watch the nozzle tip for melted PLA.")) {}
+    };
+
     class TipCheck final : public TextFrame {
     public:
         explicit TipCheck(window_t *parent)
-            : TextFrame(parent, _("Check the nozzle"), _("Is light PLA flowing from the nozzle? If not, abort: a cold pull cannot reach this blockage.")) {}
+            : TextFrame(parent, _("Check the nozzle"), _("Did melted PLA come out of the nozzle? If nothing did, the clog is above the melt zone, where a cold pull can't reach it: abort.")) {}
     };
 
     class Pack final : public TextFrame {
@@ -346,18 +358,31 @@ namespace frame {
         }
 
         static constexpr const char *text1 = N_("Heating up the nozzle");
+#if HAS_INDX()
+        static constexpr const char *text2 = N_("Next, the plug is pulled out of the nozzle.");
+#else
         static constexpr const char *text2 = N_("The filament will be unloaded automatically.");
+#endif
     };
     static_assert(common_frames::is_update_callable<HeatUp>);
 
     class AutomaticPull final : public TextFrame {
     public:
         explicit AutomaticPull(window_t *parent)
+#if HAS_INDX()
+            : TextFrame(parent, _(text1), _(text2)) {
+#else
             : TextFrame(parent, _(text1)) {
+#endif
             sound::play(SoundType::single_beep);
         }
 
+#if HAS_INDX()
+        static constexpr const char *text1 = N_("Pulling");
+        static constexpr const char *text2 = N_("Keep hands clear.");
+#else
         static constexpr const char *text1 = N_("Unloading");
+#endif
     };
 
     class ManualPull final : public TextFrame {
@@ -368,11 +393,19 @@ namespace frame {
 
         static constexpr const char *text1 = N_("Remove the filament manually");
 #if HAS_INDX()
-        static constexpr const char *text2 = N_("The extruder motor is released. Pull the filament out through the top port.");
+        static constexpr const char *text2 = N_("The extruder motor is released. Pull the strand out through the top port. Then the nozzle is warmed, wiped and docked.");
 #else
         static constexpr const char *text2 = N_("There might be a slight resistance.\nIf the filament is stuck, open the idler lever.");
 #endif
     };
+
+#if HAS_INDX()
+    class Dock final : public TextFrame {
+    public:
+        explicit Dock(window_t *parent)
+            : TextFrame(parent, _("Wiping and docking"), _("The nozzle is warmed, wiped and docked. Keep hands clear.")) {}
+    };
+#endif
 
     class PullDone final : public TextFrame {
     public:
@@ -381,7 +414,11 @@ namespace frame {
         }
 
         static constexpr const char *text1 = N_("Cold Pull successfully completed");
+#if HAS_INDX()
+        static constexpr const char *text2 = N_("Inspect the tip: thin strands with dark debris mean a good pull. Repeat until it comes out clean, then refit the PTFE tube.");
+#else
         static constexpr const char *text2 = N_("You can continue printing. If the issue persists,\nrepeat this procedure again.");
+#endif
 
         // for XL only, enabled now because of translations
         [[maybe_unused]] static constexpr const char *TODOtext10 = N_("Cold Pull successfully completed. Insert PTFE tube back in the fitting. You can continue printing. If the issue persists, repeat this procedure again.");
@@ -409,6 +446,8 @@ using Frames = FrameDefinitionList<ScreenColdPull::FrameStorage,
     FrameDefinition<PhasesColdPull::prepare_filament, frame::PrepareFilament>,
 #if HAS_INDX()
     FrameDefinition<PhasesColdPull::flush, frame::Flush>,
+    FrameDefinition<PhasesColdPull::purge_ready, frame::PurgeReady>,
+    FrameDefinition<PhasesColdPull::purge, frame::Purge>,
     FrameDefinition<PhasesColdPull::tip_check, frame::TipCheck>,
     FrameDefinition<PhasesColdPull::pack, frame::Pack>,
     FrameDefinition<PhasesColdPull::pull_ready, frame::PullReady>,
@@ -425,6 +464,9 @@ using Frames = FrameDefinitionList<ScreenColdPull::FrameStorage,
     FrameDefinition<PhasesColdPull::heat_up, frame::HeatUp>,
     FrameDefinition<PhasesColdPull::automatic_pull, frame::AutomaticPull>,
     FrameDefinition<PhasesColdPull::manual_pull, frame::ManualPull>,
+#if HAS_INDX()
+    FrameDefinition<PhasesColdPull::dock, frame::Dock>,
+#endif
     FrameDefinition<PhasesColdPull::cleanup, frame::Cleanup>,
     FrameDefinition<PhasesColdPull::pull_done, frame::PullDone>>;
 
