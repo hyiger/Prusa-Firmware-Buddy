@@ -399,8 +399,11 @@ void MI_FORMAT_USB::click(IWindowMenu & /*window_menu*/) {
     case Result::no_drive:
         MsgBoxError(_("No USB drive is connected."), Responses_Ok);
         break;
+    case Result::no_medium:
+        MsgBoxError(_("The USB drive reports no storage. If it's a card reader, insert the card and reconnect the reader."), Responses_Ok);
+        break;
     case Result::busy:
-        MsgBoxError(_("The USB drive is in use. Wait for the print or the upload to end, then try again."), Responses_Ok);
+        MsgBoxError(_("The USB drive is in use by a print, a file transfer or an open file. Try again later."), Responses_Ok);
         break;
     case Result::unsupported_drive:
         MsgBoxError(_("This USB drive can't be formatted on the printer: its sectors aren't 512 bytes."), Responses_Ok);
