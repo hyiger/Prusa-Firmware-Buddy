@@ -730,7 +730,15 @@ set_feature_for_printers(HAS_REMOTE_ACCELEROMETER "XL" "XL_DEV_KIT" "COREONE_IND
 # Some printers require manual mounting of accelerometer to the board, nozzle or bed
 set_feature_for_printers(HAS_ATTACHABLE_ACCELEROMETER "MK3.5" "MK4" "COREONE")
 
-set_feature_for_printers(HAS_COLDPULL "MK3.5" "MK4" "XL" "COREONE" "COREONEL")
+set_feature_for_printers(
+  HAS_COLDPULL
+  "MK3.5"
+  "MK4"
+  "XL"
+  "COREONE"
+  "COREONE_INDX"
+  "COREONEL"
+  )
 
 set_feature_for_printers(HAS_BED_LEVEL_CORRECTION "MK3.5" "MINI")
 
