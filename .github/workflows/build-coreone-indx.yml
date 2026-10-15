@@ -161,11 +161,62 @@ jobs:
           envsubst '${BASE_VERSION} ${VERSION} ${GITHUB_SHA}' > notes.md <<'EOF'
           Unsigned custom firmware for the **Prusa Core One INDX only**, built from `${GITHUB_SHA}`.
 
-          It is Prusa's official [${BASE_VERSION}](https://github.com/prusa3d/Prusa-Firmware-Buddy/releases/tag/v${BASE_VERSION}) with more specific error screens for a failed tool offset calibration, the XY homing motor current of 6.9.0, filament slots that record the vendor and color of the filament in each tool, and a guided cold pull. The printer shows its version as `${VERSION}`, so it can be told apart from Prusa's build. Prusa Connect is the exception, see below.
+          It is Prusa's official [${BASE_VERSION}](https://github.com/prusa3d/Prusa-Firmware-Buddy/releases/tag/v${BASE_VERSION}) with these additions, the most prominent first:
+
+          - **Filament slots**: each tool records the vendor and color of its filament, picked while loading the way an AMS does it. PrusaSlicer Filament Edition reads them over PrusaLink.
+          - **Cold pull**: Control > Cold Pull guides a cold pull on one tool, to clear a partly clogged nozzle.
+          - **Format USB drive**: Settings > System > Format USB Drive turns a drive the printer refuses into one it reads.
+          - **XY homing current**: homing calibrates at the 650 mA of 6.9.0 again, which avoids "Endstop early trigger".
+          - **Tool offset calibration errors**: a failed tool offset measurement shows a screen for its cause, instead of stock's one generic 36130.
+          - **Prusa Connect**: the printer reports the plain version to Connect, so uploads work.
+
+          The printer shows its version as `${VERSION}`, so it can be told apart from Prusa's build. Prusa Connect is the exception, see below.
+
+          ### Filament slots
+
+          Loading filament from the Filament menu asks for the vendor and the color right after the type, the way an AMS does: Load, Change and autoload all show a vendor list and then a color palette with a swatch for each color. They are saved once the load succeeds, and the "Was filament successfully extruded?" step shows a swatch of the picked color. After an unload, the tool keeps them as its previous spool, so the next load starts at the same vendor and color.
+
+          A filament change during a print (Filament Change in the Tune menu, a filament runout, or M600) doesn't ask. It leaves the tool with no vendor or color, and no previous spool either. Set them again in Filament > Filament Slots.
+
+          Load All and Change All do the same for several tools at once. Set All To asks for the type and the vendor once, then for the color of each tool, so loading eight tools of one vendor and type takes a type, a vendor and eight colors. "Don't load" at the top of a tool's color list leaves that tool out, and going back from a tool's color leaves it and the tools after it out (before any tool has a color, it returns to the vendor list). The tool rows show the picked colors, and picking a tool's filament again changes only its vendor and color. When the changes come from a print, Carry Out the Changes asks for the vendor and color of each tool it loads.
+
+          Filament > Filament Slots lists the tools with the vendor, type and color of the filament in each, and corrects them without reloading. It replaces Loaded filaments: each slot also opens the filament's details. Changing the type there changes the loaded filament type without loading anything, as `M865 L` does. The print's tool mapping screen shows each tool's color.
+
+          There are 16 preset vendors (Generic, Prusament, Polymaker, Bambu Lab, eSun, Elegoo, Sunlu, Overture, Hatchbox, Inland, 3D-Fuel, Fillamentum, Fiberlogy, Spectrum, Extrudr, colorFabb) and 16 preset colors (Red, Green, Blue, Cyan, Magenta, Yellow, Black, White, Orange, Brown, Gray, Purple, Pink, Silver, Natural, Gold), plus 8 user slots for each. Filament > Manage Filaments has Edit Vendors and Edit Colors to name the user slots and set the hex code of a user color, and Enable Vendors and Enable Colors to choose which entries the lists show.
+
+          PrusaLink reports the slots at `/api/v1/tools`, with the same credentials as its other requests, and `M866 T<tool> V"<vendor>" C"<color>"` sets them from G-code. PrusaSlicer Filament Edition 1.16.0 and later read them with Sync Filaments from Printer, which currently works only over PrusaLink, not over Prusa Connect. Setup steps with screenshots are in the [Filament Slots and Sync user guide](https://github.com/hyiger/PrusaSlicer/wiki/Filament-Slots-and-Sync).
+
+          ### Cold pull
+
+          Control > Cold Pull runs a guided cold pull on one tool, to clear a partly clogged nozzle. Stock firmware leaves the cold pull out on the INDX. This one follows the [INDX Cold Pull](https://hyiger.github.io/indx-cold-pull/) procedure, with its prompts on the printer's screen:
+
+          1. Unload the tool's filament first, as the first screen asks, then pick the tool. It moves to the middle of the bed.
+          2. Remove the tool's PTFE tube and push light-colored PLA into the top port until it stops at the drive gears.
+          3. The nozzle heats to 290 °C. Once you confirm, it flushes 60 mm of PLA: watch the tip for melted PLA.
+          4. If nothing came out, abort. The clog is above the melt zone, where a cold pull can't reach it.
+          5. It pushes 16 mm more while the nozzle cools toward 180 °C, cools to 60 °C with the fan at full speed, and waits 2 more minutes.
+          6. It heats to 80 °C in two steps. Once you confirm, the motor pulls the plug out, 80 mm at a raised current.
+          7. Pull the strand out of the top port. The nozzle is warmed to 170 °C, wiped in the wastebin and docked.
+
+          Inspect the tip: thin strands with dark debris mean a good pull. Repeat until it comes out clean, then refit the PTFE tube.
+
+          Unlike the G-code version, nothing has to be set beforehand or put back afterwards. The filament sensor is ignored during the cold pull, and the tool's filament type stays as it is, because auto retract never runs. After the pull the tool counts as empty, and its next load starts at the previous vendor and color.
+
+          ### Format USB drive
+
+          Settings > System > Format USB Drive erases the USB drive and formats it the way the printer needs it: FAT32 on an MBR partition. That helps with a drive the printer refuses, such as one formatted as exFAT, which is what Windows uses for drives larger than 32 GB, or one with a GPT partition table. Drives of 4 GB and up get 32 KB clusters.
+
+          It asks first, and it doesn't start while a print or a file transfer uses the drive, or while Save Logs To File is on. It takes from seconds to a minute or more, depending on the size of the drive. Meanwhile PrusaLink and Prusa Connect can't use the drive. Don't remove it.
+
+          ### XY homing current
+
+          After homing X and Y, the printer refines the home position with diagonal moves: it turns one motor, with the other held still, until the head stalls against the frame. The homing calibration finds the stall sensitivity for these moves and saves it together with the motor current it used, and homing runs at the saved current. Stock 6.9.1 and 6.9.2 calibrate at 550 mA, down from 650 mA in 6.9.0, so a printer whose homing was calibrated on either homes at 550 mA. At that current the motor can stall before the head reaches the frame, and homing reports "Endstop early trigger". This build calibrates at 650 mA again. The current of the motor held still, the stall sensitivity range and the speed of the moves are unchanged.
+
+          A printer whose saved calibration was made at another current recalibrates homing once, at the first homing that is allowed to, normally the one in the start G-code of the next print. The screen shows "Recalibrating home. This may take some time." while it runs. Homing before that, such as for the chamber vents, uses the saved calibration as before. A printer still on a calibration from 6.9.0 or earlier already homes at 650 mA, and nothing changes for it.
 
           ### Tool offset calibration errors
 
-          Stock firmware shows 36130, "Tool offset calibration failed", whichever way the calibration fails, and always asks to clean the nozzle and the sensor. This build shows a screen for each cause:
+          Stock firmware shows 36130, "Tool offset calibration failed", for every failure while it measures a tool, whatever the cause, and always asks to clean the nozzle and the sensor. Offsets that are measured but out of range already have their own codes in stock, 36131, 36133 and 36134, and this build leaves them as they are. It shows a screen for each cause of a failed measurement:
 
           | Code | Shown when |
           |---|---|
@@ -181,51 +232,11 @@ jobs:
 
           36130 keeps its link to Prusa's article. The QR codes on the others open their section of https://hyiger.github.io/coreone-indx-kb/codes/.
 
-          ### XY homing current
-
-          After homing X and Y, the printer refines the home position with diagonal moves: it turns one motor, with the other held still, until the head stalls against the frame. The homing calibration finds the stall sensitivity for these moves and saves it together with the motor current it used, and homing runs at the saved current. Stock 6.9.1 and 6.9.2 calibrate at 550 mA, down from 650 mA in 6.9.0, so a printer whose homing was calibrated on either homes at 550 mA. At that current the motor can stall before the head reaches the frame, and homing reports "Endstop early trigger". This build calibrates at 650 mA again. The current of the motor held still, the stall sensitivity range and the speed of the moves are unchanged.
-
-          A printer whose saved calibration was made at another current recalibrates homing once, at the first homing that is allowed to, normally the one in the start G-code of the next print. The screen shows "Recalibrating home. This may take some time." while it runs. Homing before that, such as for the chamber vents, uses the saved calibration as before. A printer still on a calibration from 6.9.0 or earlier already homes at 650 mA, and nothing changes for it.
-
-          ### Cold pull
-
-          Control > Cold Pull runs a guided cold pull on one tool, to clear a partly clogged nozzle. Stock firmware leaves the cold pull out on the INDX. This one follows the [INDX Cold Pull](https://hyiger.github.io/indx-cold-pull/) procedure, with its prompts on the printer's screen:
-
-          1. Pick the tool. It moves to the middle of the bed.
-          2. Remove the tool's PTFE tube and push light-colored PLA into the top port until it stops at the drive gears.
-          3. The nozzle heats to 290 °C. Once you confirm, it flushes 60 mm of PLA: watch the tip for melted PLA.
-          4. If nothing came out, abort. The clog is above the melt zone, where a cold pull can't reach it.
-          5. It pushes 16 mm more while the nozzle cools toward 180 °C, cools to 60 °C with the fan at full speed, and waits 2 more minutes.
-          6. It heats to 80 °C in two steps. Once you confirm, the motor pulls the plug out, 80 mm at a raised current.
-          7. Pull the strand out of the top port. The nozzle is warmed to 170 °C, wiped in the wastebin and docked.
-
-          Inspect the tip: thin strands with dark debris mean a good pull. Repeat until it comes out clean, then refit the PTFE tube.
-
-          Unlike the G-code version, nothing has to be set beforehand or put back afterwards. The filament sensor is ignored during the cold pull, and the tool's filament type stays as it is, because auto retract never runs. After the pull the tool counts as empty, and its next load starts at the previous vendor and color.
-
-          ### Filament slots
-
-          Loading filament asks for the vendor and the color right after the type, the way an AMS does: Load, Change and autoload all show a vendor list and then a color palette with a swatch for each color. They are saved once the load succeeds, and the "Is color correct?" step shows the picked color. After an unload, the tool keeps them as its previous spool, so the next load starts at the same vendor and color.
-
-          Load All and Change All do the same for several tools at once. Set All To asks for the type and the vendor once, then for the color of each tool, so loading eight tools of one vendor and type takes a type, a vendor and eight colors. "Don't load" at the top of a tool's color list leaves that tool out, and going back from a tool's color leaves it and the tools after it out (before any tool has a color, it returns to the vendor list). The tool rows show the picked colors, and picking a tool's filament again changes only its vendor and color. When the changes come from a print, Carry Out the Changes asks for the vendor and color of each tool it loads.
-
-          Filament > Filament Slots lists the tools with the vendor, type and color of the filament in each, and corrects them without reloading. It replaces Loaded filaments: each slot also opens the filament's details. Changing the type there changes the loaded filament type without loading anything, as `M865 L` does. The print's tool mapping screen shows each tool's color.
-
-          There are 16 preset vendors (Generic, Prusament, Polymaker, Bambu Lab, eSun, Elegoo, Sunlu, Overture, Hatchbox, Inland, 3D-Fuel, Fillamentum, Fiberlogy, Spectrum, Extrudr, colorFabb) and 16 preset colors (Red, Green, Blue, Cyan, Magenta, Yellow, Black, White, Orange, Brown, Gray, Purple, Pink, Silver, Natural, Gold), plus 8 user slots for each. Filament > Manage Filaments has Edit Vendors and Edit Colors to name the user slots and set the hex code of a user color, and Enable Vendors and Enable Colors to choose which entries the lists show.
-
-          PrusaLink reports the slots at `/api/v1/tools`, with the same credentials as its other requests, and `M866 T<tool> V"<vendor>" C"<color>"` sets them from G-code.
-
           ### Prusa Connect
 
-          Prusa Connect turns off file transfer for a firmware version it does not recognize, such as one with a prerelease tag like `${VERSION}`. Uploads then fail with "The current printer firmware version do not support binary gcodes", and Connect marks the firmware as unsupported. This build reports `${BASE_VERSION}` to Connect, as a release build does, so Connect shows `${BASE_VERSION}` and uploads work. The printer's screens, PrusaLink and M115 still report `${VERSION}`.
+          Prusa Connect turns off file transfer for a firmware version it does not recognize, such as one with a prerelease tag like `${VERSION}`. Uploads then fail with "The current printer firmware version do not support binary gcodes", and Connect marks the firmware as unsupported. This build reports the plain `${BASE_VERSION}` to Connect, without the prerelease tag or build number, so Connect shows `${BASE_VERSION}` and uploads work. The printer's screens, PrusaLink and M115 still report `${VERSION}`, and M115, PrusaLink and Version Info add the build number after a `+`.
 
           Connect may offer a newer stock firmware as an update. Installing it replaces this build.
-
-          ### Format USB drive
-
-          Settings > System > Format USB Drive erases the USB drive and formats it the way the printer needs it: FAT32 on an MBR partition. That helps with a drive the printer refuses, such as one formatted as exFAT, which is what Windows offers for drives of 32 GB and up, or one with a GPT partition table. Drives of 4 GB and up get 32 KB clusters.
-
-          It asks first, and it doesn't start while a print or a file transfer uses the drive, or while Save Logs To File is on. It takes from seconds to a minute or more, depending on the size of the drive. Meanwhile PrusaLink and Prusa Connect can't use the drive. Don't remove it.
 
           ### Flashing
 
