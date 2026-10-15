@@ -52,6 +52,10 @@
 #include <wui.h>
 #include <power_panic.hpp>
 #include <logging/log_dest_file.hpp>
+#include <DialogHandler.hpp>
+#include <marlin_vars.hpp>
+#include <usb_host/usb_format.hpp>
+#include "usb_host.h"
 #include <numeric_input_config_common.hpp>
 #include <option/has_mmu2.h>
 #include <gui/menu_item/menu_item_utils.hpp>
@@ -350,6 +354,71 @@ void MI_SAVE_DUMP::click(IWindowMenu & /*window_menu*/) {
         MsgBoxInfo(_("A crash dump report (file dump.bin) has been saved to the USB drive."), Responses_Ok);
     } else {
         MsgBoxError(_("Error saving crash dump report to the USB drive. Please reinsert the USB drive and try again."), Responses_Ok);
+    }
+}
+
+/*****************************************************************************/
+// MI_FORMAT_USB
+MI_FORMAT_USB::MI_FORMAT_USB()
+    : IWindowMenuItem(_(label), nullptr, is_enabled_t::yes, is_hidden_t::no) {
+}
+
+void MI_FORMAT_USB::click(IWindowMenu & /*window_menu*/) {
+    using usb_format::Result;
+
+    if (!usb_host::is_drive_connected()) {
+        MsgBoxError(_("No USB drive is connected."), Responses_Ok);
+        return;
+    }
+    if (marlin_vars().print_state.get() != marlin_server::State::Idle) {
+        MsgBoxError(_("The USB drive can't be formatted while a print is in progress."), Responses_Ok);
+        return;
+    }
+    if (logging::file_log_is_enabled()) {
+        MsgBoxError(_("Turn off Save Logs To File first. It keeps a file open on the USB drive."), Responses_Ok);
+        return;
+    }
+    if (MsgBoxWarning(_("All files on the USB drive will be erased. This cannot be undone.\nDo you want to format the USB drive?"), Responses_YesNo, 1) != Response::Yes) {
+        return;
+    }
+
+    usb_format::set_last_result(Result::running);
+    if (!gui_try_gcode_with_msg("M1706")) {
+        return;
+    }
+    window_dlg_wait_t::wait_until(_("Formatting the USB drive"), [] {
+        // Lets the format's own wait screen open on top of this one
+        DialogHandler::Access().Loop();
+        return usb_format::last_result() != Result::running;
+    });
+
+    switch (usb_format::last_result()) {
+    case Result::ok:
+        MsgBoxInfo(_("The USB drive has been formatted."), Responses_Ok);
+        break;
+    case Result::no_drive:
+        MsgBoxError(_("No USB drive is connected."), Responses_Ok);
+        break;
+    case Result::busy:
+        MsgBoxError(_("The USB drive is in use. Wait for the print or the upload to end, then try again."), Responses_Ok);
+        break;
+    case Result::unsupported_drive:
+        MsgBoxError(_("This USB drive can't be formatted on the printer: its sectors aren't 512 bytes."), Responses_Ok);
+        break;
+    case Result::too_small:
+        MsgBoxError(_("This USB drive is too small for FAT32."), Responses_Ok);
+        break;
+    case Result::out_of_memory:
+        MsgBoxError(_("Not enough memory to format the USB drive. Restart the printer and try again."), Responses_Ok);
+        break;
+    case Result::write_failed:
+        MsgBoxError(_("Writing to the USB drive failed. It may be write-protected, faulty or removed."), Responses_Ok);
+        break;
+    case Result::none:
+    case Result::running:
+    case Result::failed:
+        MsgBoxError(_("Formatting the USB drive failed."), Responses_Ok);
+        break;
     }
 }
 

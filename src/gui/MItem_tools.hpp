@@ -193,6 +193,16 @@ protected:
     virtual void click(IWindowMenu &window_menu) override;
 };
 
+class MI_FORMAT_USB : public IWindowMenuItem {
+    static constexpr const char *const label = N_("Format USB Drive");
+
+public:
+    MI_FORMAT_USB();
+
+protected:
+    virtual void click(IWindowMenu &window_menu) override;
+};
+
 class MI_TIMEOUT : public WI_ICON_SWITCH_OFF_ON_t {
     constexpr static const char *const label = N_("Menu Timeout");
 

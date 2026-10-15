@@ -11,6 +11,7 @@ using ScreenMenuSystemBase = BasicScreenMenu<
     MI_LOG_TO_TXT,
     MI_DEVHASH_IN_QR,
     MI_LOAD_SETTINGS,
+    MI_FORMAT_USB,
 #if HAS_E2EE_SUPPORT()
     MI_E2EE,
 #endif
