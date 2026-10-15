@@ -640,10 +640,13 @@ namespace {
         heat_up(INDX_WIPE_TEMP, PhasesColdPull::dock);
         thermalManager.disable_hotend();
 
-        // As at the end of a print: wipe, park, dock.
-        nozzle_cleaner::load_and_execute(nozzle_cleaner::Sequence::clean);
-        mapi::park(mapi::get_parking_position(mapi::ParkPosition::park).without_z_move());
-        tool_change(NoTool {}, tool_return_t::no_return);
+        // As at the end of a print: wipe, park, dock. Stop at the first step that fails, and don't report
+        // success while the tool may still be attached.
+        if (!nozzle_cleaner::load_and_execute(nozzle_cleaner::Sequence::clean)
+            || !mapi::park(mapi::get_parking_position(mapi::ParkPosition::park).without_z_move())
+            || !tool_change(NoTool {}, tool_return_t::no_return)) {
+            was_success = false;
+        }
         return PhasesColdPull::cleanup;
     }
     #endif
