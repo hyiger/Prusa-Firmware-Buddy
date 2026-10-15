@@ -41,9 +41,9 @@ std::optional<FilamentSpool> pick_spool_for_tool(VirtualToolIndex tool, Filament
 /// which would end up only partly upper-cased
 void uppercase_title(std::span<char> text);
 
-/// Asks for the vendor and color of the filament about to be loaded, once its type is picked.
+/// Asks for the vendor and color of the filament about to be loaded, once its type is known.
 /// Applies to loads into a single tool. The pickers start at the tool's previous spool.
-/// \returns false if the user went back to picking the type
+/// \returns false if the user went back from the vendor, as to picking the type
 bool pick_spool_for_load(FilamentType type, std::variant<VirtualToolIndex, AllTools> tool, PreheatMode mode);
 
 } // namespace filament_library_dialog

@@ -12,6 +12,10 @@
 
 #include <option/has_toolchanger.h>
 #include <bsod/bsod.h>
+#include <option/has_filament_slots.h>
+#if HAS_FILAMENT_SLOTS()
+    #include <gui/screen/filament/filament_library_dialog.hpp>
+#endif
 #if HAS_TOOLCHANGER()
     #include <Marlin/src/module/prusa/toolchanger.h>
     #include <gui/dialogs/dialog_tool_select.hpp>
@@ -31,6 +35,12 @@ bool inject(VirtualToolIndex tool) {
     if (msg_answer != Response::Yes) {
         return false;
     }
+#if HAS_FILAMENT_SLOTS()
+    // M600 without S loads this type, and a pick counts only for the type it was made for
+    if (!filament_library_dialog::pick_spool_for_load(FilamentType::for_tool_heuristic(tool), tool, PreheatMode::change_load)) {
+        return false;
+    }
+#endif
     marlin_client::inject(GCodeLiteral("M600 P T%.0f", static_cast<float>(tool.to_raw())));
     return true;
 }
