@@ -1016,6 +1016,19 @@ static void clear_lock (	/* Clear lock entries of the volume */
 	}
 }
 
+// PRUSA: count the files and directories open on a volume, to tell whether it can be formatted
+UINT ff_count_open_objects (	/* Number of open files and directories, other than the root directory */
+	FATFS *fs
+)
+{
+	UINT i, n = 0;
+
+	for (i = 0; i < FF_FS_LOCK; i++) {
+		if (Files[i].fs == fs) n++;
+	}
+	return n;
+}
+
 #endif	/* FF_FS_LOCK != 0 */
 
 

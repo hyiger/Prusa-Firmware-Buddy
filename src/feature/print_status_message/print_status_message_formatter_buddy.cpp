@@ -30,6 +30,7 @@ static constexpr EnumArray<Message::Type, const char *, Message::Type::_cnt> mes
         { Message::Type::absorbing_heat, N_("Absorbing heat") },
         { Message::Type::waiting_for_hotend_temp, N_("Waiting for hotend") },
         { Message::Type::waiting_for_bed_temp, N_("Waiting for bed") },
+        { Message::Type::formatting_usb_drive, N_("Formatting the USB drive") },
 
 #if ENABLED(PROBE_CLEANUP_SUPPORT)
         { Message::Type::nozzle_cleaning, N_("Nozzle cleaning") },
@@ -75,6 +76,7 @@ void PrintStatusMessageFormatterBuddy::format(StringBuilder &target, const Messa
 
     case Message::Type::homing:
     case Message::Type::recalibrating_home:
+    case Message::Type::formatting_usb_drive:
 #if HAS_SPOOL_JOIN()
     case Message::Type::spool_joined:
     case Message::Type::joining_spool:

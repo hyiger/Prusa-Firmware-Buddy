@@ -19,6 +19,8 @@ USBH_HandleTypeDef hUsbHostHS;
 static std::atomic<bool> media_inserted = false;
 static std::atomic<bool> media_inserted_since_startup = false;
 static uint32_t media_on_startup_detection_timeout = 0;
+static std::atomic<bool> drive_connected = false;
+static std::atomic<bool> formatting = false;
 
 namespace usb_host {
 
@@ -32,6 +34,41 @@ bool is_media_inserted_since_startup() {
 
 void disable_media() {
     media_inserted = false;
+}
+
+bool is_drive_connected() {
+    return drive_connected;
+}
+
+void enable_media() {
+    if (drive_connected) {
+        media_inserted = true;
+        // Undoes it for a drive that disconnected meanwhile. One can't connect again until the format ends.
+        if (!drive_connected) {
+            media_inserted = false;
+        }
+    }
+}
+
+bool begin_format() {
+    bool expected = false;
+    if (!formatting.compare_exchange_strong(expected, true)) {
+        return false;
+    }
+    // The drive disconnected before the format began.
+    if (!drive_connected) {
+        formatting = false;
+        return false;
+    }
+    return true;
+}
+
+void end_format() {
+    formatting = false;
+}
+
+bool is_formatting() {
+    return formatting;
 }
 
 } // namespace usb_host
@@ -165,17 +202,28 @@ void USBH_UserProcess([[maybe_unused]] USBH_HandleTypeDef *phost, uint8_t id) {
     switch (id) {
 
     case HOST_USER_DISCONNECTION:
+        drive_connected = false;
         media_inserted = false;
         media_inserted_since_startup = false;
-        f_mount(0, (TCHAR const *)USBHPath, 1); // umount
+        // Unmounting deletes the volume's lock, which a format holds and other tasks wait on. Left mounted, the
+        // volume fails every access until the drive is back and mounted again.
+        if (!formatting) {
+            f_mount(0, (TCHAR const *)USBHPath, 1); // umount
+        }
         break;
 
     case HOST_USER_CLASS_ACTIVE: {
+        // Mounting would delete the lock of a format that hasn't ended yet. Its writes fail once the drive is
+        // gone, so it ends soon.
+        while (formatting) {
+            osDelay(10);
+        }
         FRESULT result = f_mount(&USBHFatFS, (TCHAR const *)USBHPath, 0);
         if (result != FR_OK) {
             break;
         }
 
+        drive_connected = true;
         media_inserted_since_startup = (media_on_startup_detection_timeout != 0);
         media_inserted = true;
 
