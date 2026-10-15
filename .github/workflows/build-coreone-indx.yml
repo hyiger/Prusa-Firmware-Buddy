@@ -225,7 +225,7 @@ jobs:
 
           Settings > System > Format USB Drive erases the USB drive and formats it the way the printer needs it: FAT32 on an MBR partition. That helps with a drive the printer refuses, such as one formatted as exFAT, which is what Windows offers for drives of 32 GB and up, or one with a GPT partition table. Drives of 4 GB and up get 32 KB clusters.
 
-          It asks first, and it doesn't start while a print or an upload uses the drive, or while Save Logs To File is on. It takes from seconds to a minute or more, depending on the size of the drive. Don't remove the drive meanwhile.
+          It asks first, and it doesn't start while a print or a file transfer uses the drive, or while Save Logs To File is on. It takes from seconds to a minute or more, depending on the size of the drive. Meanwhile PrusaLink and Prusa Connect can't use the drive. Don't remove it.
 
           ### Flashing
 
