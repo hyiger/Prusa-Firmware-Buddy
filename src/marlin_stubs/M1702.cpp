@@ -324,7 +324,10 @@ namespace {
 
         BlockEStallDetection estall_blocker;
         for (uint8_t i = 0; i < 3; ++i) {
-            mapi::extruder_move(20, 2);
+            // A move the planner refused (it drains after a stop or a motion fault) didn't happen.
+            if (!mapi::extruder_move(20, 2)) {
+                return PhasesColdPull::cleanup;
+            }
             planner.synchronize();
             if (abort_requested(PhasesColdPull::purge) || (i != 2 && !delay_abortable(PhasesColdPull::purge, 2000))) {
                 return PhasesColdPull::cleanup;
@@ -354,7 +357,9 @@ namespace {
         mapi::ColdExtrudeGuard cold_extrude_guard;
         BlockEStallDetection estall_blocker;
         for (uint8_t i = 0; i < 8; ++i) {
-            mapi::extruder_move(2, 1);
+            if (!mapi::extruder_move(2, 1)) {
+                return PhasesColdPull::cleanup;
+            }
             planner.synchronize();
             if (abort_requested(PhasesColdPull::pack) || (i != 7 && !delay_abortable(PhasesColdPull::pack, 5000))) {
                 return PhasesColdPull::cleanup;
@@ -594,15 +599,20 @@ namespace {
             });
             buddy::set_active_motor_current_profile(buddy::StandardMotorCurrentProfile::increased_e);
             BlockEStallDetection estall_blocker;
-            mapi::extruder_move(-40, 50);
+            bool pulled = mapi::extruder_move(-40, 50);
             planner.synchronize();
-            mapi::extruder_move(-40, 20);
+            pulled = pulled && mapi::extruder_move(-40, 20);
     #else
             mapi::extruder_move(-std::min(300, EXTRUDE_MAXLENGTH), 50);
     #endif
             planner.synchronize();
 
     #if HAS_INDX()
+            // Without the full pull, the strand is still in the tool.
+            if (!pulled) {
+                return PhasesColdPull::cleanup;
+            }
+
             // Let the user remove the pulled filament without releasing XYZ.
             disable_e_steppers();
             thermalManager.disable_hotend();
