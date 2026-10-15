@@ -26,6 +26,7 @@ void enable_media();
 /// \returns false if no drive is connected or another format is running
 bool begin_format();
 void end_format();
+bool is_formatting();
 } // namespace usb_host
 
 namespace usbh_power_cycle {

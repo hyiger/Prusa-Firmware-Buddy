@@ -55,7 +55,7 @@ bool begin_format() {
     if (!formatting.compare_exchange_strong(expected, true)) {
         return false;
     }
-    // A disconnection before the format began has unmounted the volume.
+    // The drive disconnected before the format began.
     if (!drive_connected) {
         formatting = false;
         return false;
@@ -65,6 +65,10 @@ bool begin_format() {
 
 void end_format() {
     formatting = false;
+}
+
+bool is_formatting() {
+    return formatting;
 }
 
 } // namespace usb_host
