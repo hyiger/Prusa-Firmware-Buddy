@@ -481,6 +481,11 @@ namespace {
             bsod_unreachable();
         }
     #if HAS_INDX()
+        // The cool down gives up after a while, as with a failed fan. A plug still above the pull temperature
+        // hasn't set, and the pull would leave it in the nozzle.
+        if (Temperature::degHotend(*active_tool) > INDX_PULL_TEMP) {
+            return PhasesColdPull::cleanup;
+        }
         cold_pull::TemperatureProgressData complete { { 0 } };
         complete.percent = 100;
         marlin_server::fsm_change(PhasesColdPull::cool_down, complete.fsm_data);
