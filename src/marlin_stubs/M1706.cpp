@@ -18,8 +18,8 @@ namespace PrusaGcodeSuite {
  *
  * Internal GCode
  *
- * Erases everything on the USB drive and formats it as FAT32 on an MBR partition. Refused while a print or
- * an upload uses the drive or a file on it is open. The outcome is kept for the GUI in usb_format::last_result().
+ * Erases everything on the USB drive and formats it as FAT32 on an MBR partition. Refused while a print, a
+ * file transfer or an open file uses the drive.
  *
  *#### Usage
  *

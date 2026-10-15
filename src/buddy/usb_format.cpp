@@ -44,7 +44,7 @@ namespace {
         return true;
     }
 
-    /// The part that runs with the volume locked.
+    /// Takes the volume's lock and holds it until it returns.
     Result format_locked(BYTE *work, UINT len, LBA_t last_sector) {
         FATFS &fs = USBHFatFS;
 
@@ -90,15 +90,19 @@ namespace {
         }
 
         // f_mkfs writes the MBR and the volume only, so clear what's left of a GPT, which the printer can't read.
-        // Done last, so that a drive f_mkfs refuses keeps its file system. The end of the drive is free space of
-        // the new volume.
+        // Done last, so that a drive f_mkfs refuses keeps its file system.
+        uint64_t gpt_backup_header = 0;
+        if (disk_read(drive, work, 1, 1) == RES_OK && memcmp(work, "EFI PART", 8) == 0) {
+            memcpy(&gpt_backup_header, work + 32, sizeof(gpt_backup_header));
+        }
         memset(work, 0, len);
         const UINT buf_sectors = len / FF_MAX_SS;
         if (!zero_sectors(work, buf_sectors, 1, partition_start - 1)) {
             return Result::write_failed;
         }
-        // A drive over 2 TiB reports its size as 0xFFFFFFFF sectors; f_mkfs uses its first 2 TiB.
-        if (last_sector != 0xFFFFFFFF && last_sector > partition_start + gpt_sectors
+        // Only where the GPT puts its backup, at the last sector: some USB bridges report one sector more than
+        // they have. The backup on a drive over 2 TiB is past the 0xFFFFFFFF sectors it reports.
+        if (gpt_backup_header == last_sector
             && !zero_sectors(work, buf_sectors, last_sector - gpt_sectors + 1, gpt_sectors)) {
             return Result::write_failed;
         }
@@ -123,6 +127,10 @@ Result format_drive() {
     DWORD sector_size = 0;
     if (disk_ioctl(drive, GET_SECTOR_SIZE, &sector_size) != RES_OK) {
         return Result::failed;
+    }
+    // A card reader without a card, until it's reconnected with one
+    if (sector_size == 0) {
+        return Result::no_medium;
     }
     if (sector_size != FF_MAX_SS) {
         return Result::unsupported_drive;
