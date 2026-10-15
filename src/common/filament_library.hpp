@@ -210,6 +210,11 @@ struct FilamentSpool {
     /// Every load and purge goes through here first, so no later one can reuse the spool.
     static void start_load(FilamentType type);
 
+    /// Called by the Marlin thread after start_load, when a filament change during a print starts
+    /// loading \p type into \p tool. Runouts and M600 from G-code ask for no spool, so unless one was
+    /// picked for this load, the new filament gets \p spool, the one the tool had before the change.
+    static void keep_for_change(VirtualToolIndex tool, FilamentType type, FilamentSpool spool);
+
     /// Assigns the spool taken by start_load to \p tool, once purging \p type into it succeeded. Each
     /// purge of the load assigns it again, as after the filament was pulled out and pushed back in.
     /// Filament loaded without a pick, such as from G-code, ends up without a spool anyway, because

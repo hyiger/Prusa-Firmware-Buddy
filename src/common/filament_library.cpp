@@ -285,6 +285,12 @@ bool is_loading(VirtualToolIndex tool, FilamentType type) {
 
 } // namespace
 
+void FilamentSpool::keep_for_change(VirtualToolIndex tool, FilamentType type, FilamentSpool spool) {
+    if (!is_loading(tool, type)) {
+        loading = PickedForLoad { .tool = tool.to_raw(), .type = type, .spool = spool };
+    }
+}
+
 void FilamentSpool::finish_load(VirtualToolIndex tool, FilamentType type) {
     if (!is_loading(tool, type)) {
         return;
