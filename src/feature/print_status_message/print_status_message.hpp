@@ -35,6 +35,8 @@ struct PrintStatusMessage {
         waiting_for_hotend_temp,
         waiting_for_bed_temp,
 
+        formatting_usb_drive,
+
 #if ENABLED(PROBE_CLEANUP_SUPPORT)
         nozzle_cleaning,
 #endif
@@ -112,6 +114,7 @@ struct PrintStatusMessage {
         TypeRecord<Type::absorbing_heat, PrintStatusMessageDataProgress>,
         TypeRecord<Type::waiting_for_hotend_temp, PrintStatusMessageDataToolProgress>,
         TypeRecord<Type::waiting_for_bed_temp, PrintStatusMessageDataProgress>,
+        TypeRecord<Type::formatting_usb_drive, std::monostate>,
 #if ENABLED(PROBE_CLEANUP_SUPPORT)
         TypeRecord<Type::nozzle_cleaning, std::monostate>,
 #endif

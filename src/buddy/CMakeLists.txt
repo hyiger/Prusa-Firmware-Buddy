@@ -18,6 +18,7 @@ target_sources(
           timing_sys.cpp
           usb_device.cpp
           usb_device_cdc.cpp
+          usb_format.cpp
           usb_host.cpp
           usbh_conf.cpp
           usbh_diskio.cpp
