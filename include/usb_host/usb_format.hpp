@@ -23,7 +23,8 @@ enum class Result : uint8_t {
 };
 
 /// Erases the USB drive and formats it as FAT32 on an MBR partition, with two FATs, FatFs's cluster size
-/// (32 KiB from 2 GiB up), and the data area aligned to 4 MiB. A GPT the drive had is cleared too.
+/// (32 KiB once the partition is 2 GiB or more), and the data area aligned to 4 MiB. A GPT the drive had is
+/// cleared too.
 ///
 /// Refuses while an upload runs or any file is open on the drive, and other users of the drive wait until
 /// it ends. Blocks for seconds to minutes, so don't call it from the Marlin thread, which has to keep feeding
