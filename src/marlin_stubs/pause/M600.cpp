@@ -71,6 +71,11 @@ static_assert(HAS_PAUSE());
     #include "Marlin/src/feature/prusa/MMU2/mmu2_mk4.h"
 #endif
 
+#include <option/has_filament_slots.h>
+#if HAS_FILAMENT_SLOTS()
+    #include <filament_library.hpp>
+#endif
+
 static void M600_manual(const GCodeParser2 &);
 
 #include <common/mapi/parking.hpp>
@@ -274,6 +279,11 @@ void M600_execute(mapi::ParkingPosition park_position, VirtualToolIndex target_t
     // on resume. Snapshot what the branch above left in effect, not the pre-raise target.
     settings.SetResumeNozzleTemperature(static_cast<int16_t>(std::max(disp_temp, targ_temp)));
 
+#if HAS_FILAMENT_SLOTS()
+    // Read before setting the type below, which clears the spool of an empty tool
+    const FilamentSpool spool = FilamentSpool::previous_for_tool(target_tool);
+#endif
+
     if (filament_type.has_value()) {
         config_store().set_filament_type(target_tool, filament_type.value());
     } else {
@@ -281,6 +291,9 @@ void M600_execute(mapi::ParkingPosition park_position, VirtualToolIndex target_t
     }
 
     filament::set_type_to_load(*filament_type);
+#if HAS_FILAMENT_SLOTS()
+    FilamentSpool::keep_for_change(target_tool, *filament_type, spool);
+#endif
     filament::set_color_to_load(filament_colour);
     Pause::Instance().filament_change(settings, is_filament_stuck);
 

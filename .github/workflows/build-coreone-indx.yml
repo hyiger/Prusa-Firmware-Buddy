@@ -176,7 +176,7 @@ jobs:
 
           Loading filament from the Filament menu asks for the vendor and the color right after the type, the way an AMS does: Load, Change and autoload all show a vendor list and then a color palette with a swatch for each color. They are saved once the load succeeds, and the "Was filament successfully extruded?" step shows a swatch of the picked color. After an unload, the tool keeps them as its previous spool, so the next load starts at the same vendor and color.
 
-          A filament change during a print (Filament Change in the Tune menu, a filament runout, or M600) doesn't ask. It leaves the tool with no vendor or color, and no previous spool either. Set them again in Filament > Filament Slots.
+          During a print, Filament Change in the Tune menu asks for the vendor and color of the new spool after "Change filament now?", starting at the tool's current ones. A filament runout and M600 in the G-code don't ask, so the new filament gets the vendor and color of the old one. If the new spool differs, correct it in Filament > Filament Slots.
 
           Load All and Change All do the same for several tools at once. Set All To asks for the type and the vendor once, then for the color of each tool, so loading eight tools of one vendor and type takes a type, a vendor and eight colors. "Don't load" at the top of a tool's color list leaves that tool out, and going back from a tool's color leaves it and the tools after it out (before any tool has a color, it returns to the vendor list). The tool rows show the picked colors, and picking a tool's filament again changes only its vendor and color. When the changes come from a print, Carry Out the Changes asks for the vendor and color of each tool it loads.
 
