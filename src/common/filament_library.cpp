@@ -239,6 +239,9 @@ static_assert(sizeof(PickedForLoad) == 4);
 /// Picked in the GUI, waiting for Marlin to accept its filament selection
 std::atomic<PickedForLoad> picked_for_load;
 
+/// Picked in the GUI for a filament change during a print, waiting for its M600. The type is unused.
+std::atomic<PickedForLoad> picked_for_change;
+
 /// Accepted with its filament selection, waiting for the load to start. Only the Marlin thread uses it.
 PickedForLoad accepted;
 
@@ -272,6 +275,7 @@ void FilamentSpool::pick_for_load(VirtualToolIndex tool, FilamentType type, Fila
 
 void FilamentSpool::discard_pick() {
     picked_for_load.store({});
+    picked_for_change.store({});
     accepted = {};
 }
 
@@ -282,6 +286,26 @@ void FilamentSpool::accept_pick() {
 void FilamentSpool::start_load(FilamentType type) {
     const PickedForLoad picked = std::exchange(accepted, {});
     loading = picked.type == EncodedFilamentType(type) ? picked : PickedForLoad {};
+}
+
+void FilamentSpool::pick_for_change(VirtualToolIndex tool, FilamentSpool spool) {
+    picked_for_change = PickedForLoad { .tool = tool.to_raw(), .spool = spool };
+}
+
+void FilamentSpool::withdraw_change_pick() {
+    picked_for_change.store({});
+}
+
+std::optional<FilamentSpool> FilamentSpool::take_change_pick(VirtualToolIndex tool) {
+    const PickedForLoad picked = picked_for_change.exchange({});
+    if (picked.tool != tool.to_raw()) {
+        return std::nullopt;
+    }
+    return picked.spool;
+}
+
+void FilamentSpool::keep_for_change(VirtualToolIndex tool, FilamentSpool spool) {
+    loading = PickedForLoad { .tool = tool.to_raw(), .spool = spool };
 }
 
 void FilamentSpool::finish_load(VirtualToolIndex tool, bool clear_without_pick) {

@@ -68,12 +68,35 @@ static_assert(HAS_PAUSE());
     #include <Marlin/src/module/prusa/toolchanger.h>
 #endif
 
+#include <option/has_filament_slots.h>
+#if HAS_FILAMENT_SLOTS()
+    #include <filament_library.hpp>
+#endif
+
 #include <option/has_mmu2.h>
 #if HAS_MMU2()
     #include "Marlin/src/feature/prusa/MMU2/mmu2_mk4.h"
 #endif
 
 static void M600_manual(const GCodeParser2 &);
+
+#if HAS_FILAMENT_SLOTS()
+namespace {
+
+/// \returns \p filament without a color, for this change only, as filament::apply_load_color applies one
+FilamentType filament_without_color(FilamentType filament) {
+    FilamentTypeParameters params = filament.parameters();
+    if (!params.color.has_value()) {
+        return filament;
+    }
+    params.color = std::nullopt;
+    filament = FilamentType::pending_adhoc;
+    filament.set_parameters(params);
+    return filament;
+}
+
+} // namespace
+#endif
 
 #include <common/mapi/parking.hpp>
 #include <config_store/store_instance.hpp>
@@ -157,7 +180,7 @@ void GcodeSuite::M600() {
 void M600_execute(mapi::ParkingPosition park_position, VirtualToolIndex target_tool,
     xyze_float_t resume_point, std::optional<float> unloadLength, std::optional<float> fastLoadLength,
     std::optional<float> retractLength, std::optional<Color> filament_colour,
-    std::optional<FilamentType> filament_type, bool);
+    std::optional<FilamentType> filament_type, bool is_filament_stuck, bool same_spool);
 
 void M600_manual(const GCodeParser2 &p) {
     const std::optional<VirtualToolIndex> virtual_tool = stdext::get_optional<VirtualToolIndex>(PrusaGcodeSuite::get_target_virtual_from_command_p(p));
@@ -198,13 +221,21 @@ void M600_manual(const GCodeParser2 &p) {
         p.option<float>('E').transform(fabsf),
         p.option<Color>('C'),
         p.option<FilamentType>('S'),
-        false);
+        false,
+        // A runout: the same filament goes back in, from a new spool or the old one
+        p.option<bool>('A').value_or(false));
 }
 
 void M600_execute(mapi::ParkingPosition park_position, VirtualToolIndex target_tool, xyze_float_t resume_point,
     std::optional<float> unloadLength, std::optional<float> fastLoadLength, std::optional<float> retractLength,
     std::optional<Color> filament_colour, std::optional<FilamentType> filament_type,
-    bool is_filament_stuck) {
+    bool is_filament_stuck, [[maybe_unused]] bool same_spool) {
+
+#if HAS_FILAMENT_SLOTS()
+    // Before the tool change below, which takes seconds: a pick made for a later change meanwhile
+    // is left for that change
+    const std::optional<FilamentSpool> picked_spool = FilamentSpool::take_change_pick(target_tool);
+#endif
 
     // Ignore estalls during filament change
     BlockEStallDetection estall_blocker;
@@ -279,15 +310,49 @@ void M600_execute(mapi::ParkingPosition park_position, VirtualToolIndex target_t
     // on resume. Snapshot what the branch above left in effect, not the pre-raise target.
     settings.SetResumeNozzleTemperature(static_cast<int16_t>(std::max(disp_temp, targ_temp)));
 
+#if HAS_FILAMENT_SLOTS()
+    // Read before the type changes below, as setting filament on an empty tool clears its spool
+    const FilamentType old_filament = FilamentType::for_tool(target_tool);
+    FilamentSpool spool = FilamentSpool::previous_for_tool(target_tool);
+#endif
+
     if (filament_type.has_value()) {
         config_store().set_filament_type(target_tool, filament_type.value());
     } else {
         filament_type = FilamentType::for_tool_heuristic(target_tool);
     }
 
+#if HAS_FILAMENT_SLOTS()
+    bool drop_color = false;
+    if (picked_spool) {
+        // Picked in the GUI for this change: its color becomes the filament's, as a load's pick does
+        spool = *picked_spool;
+        filament_colour = spool.color.color();
+        drop_color = !filament_colour.has_value();
+
+    } else if (!filament_type->matches(old_filament.parameters().name.data())) {
+        // Another material comes from another spool
+        spool = {};
+
+    } else if (!same_spool || filament_colour.has_value()) {
+        // A color change, as the slicer emits it: the vendor likely stays, the color does not.
+        // A color given in the G-code shows as the filament's own.
+        spool.color = {};
+        drop_color = !filament_colour.has_value();
+    }
+
+    if (drop_color) {
+        // Reloading the tool's own filament would bring back the old color in place of the spool's
+        *filament_type = filament_without_color(*filament_type);
+    }
+#endif
+
     *filament_type = filament::apply_load_color(*filament_type, target_tool, filament_colour);
 
     filament::set_type_to_load(*filament_type);
+#if HAS_FILAMENT_SLOTS()
+    FilamentSpool::keep_for_change(target_tool, spool);
+#endif
     Pause::Instance().filament_change(settings, is_filament_stuck);
 
 #if HAS_TOOLCHANGER()
@@ -360,6 +425,8 @@ void PrusaGcodeSuite::M1601() {
         current_position,
         std::nullopt, std::nullopt, std::nullopt,
         std::nullopt, std::nullopt,
+        true,
+        // The stuck filament goes back in
         true);
 
     EMotorStallDetector::Instance().ClearReported();
