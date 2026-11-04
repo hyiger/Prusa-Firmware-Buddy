@@ -23,6 +23,7 @@
 #include "../../../inc/MarlinConfig.h"
 #include "config_store/store_instance.hpp"
 #include <option/has_crash_detection.h>
+#include <option/has_indx.h>
 #include <option/has_power_panic.h>
 
 #if ENABLED(AUTO_BED_LEVELING_UBL)
@@ -40,6 +41,7 @@
   #include "../../../gcode/gcode.h"
   #include "../../../libs/least_squares_fit.h"
   #include "../../../feature/print_area.h"
+  #include "ubl_g29_phases.hpp"
   #include <fanctl.hpp>
   #include <option/has_love_board.h>
   #include <raii/scope_guard.hpp>
@@ -70,6 +72,10 @@
   #endif
   #if HAS_POWER_PANIC()
     #include "power_panic.hpp"
+  #endif
+  #if HAS_INDX()
+    #include "../../../module/tool_change.h"
+    #include <module/prusa/toolchanger.h>
   #endif
 
   #include <math.h>
@@ -364,6 +370,17 @@
         gcode.process_subcommands_now_P(PSTR("G28 O"));
       }
     }
+
+    #if HAS_INDX()
+      // Homed axes do not imply a picked tool: it may have been parked since homing
+      if (parser.seen('P') && ubl_g29_phase_probes(g29_phase_value)
+          && std::holds_alternative<NoTool>(PhysicalToolIndex::currently_selected())
+          && !prusa_toolchanger.pick_any_tool(tool_return_t::no_return, current_position.xyz(), tool_change_lift_t::no_lift, false)) {
+        log_error(Marlin, "G29 P%d: no tool picked", g29_phase_value);
+        SERIAL_ECHOLNPGM("?Probing requires a picked tool.\n");
+        return;
+      }
+    #endif
 
     // Invalidate Mesh Points. This command is a little bit asymmetrical because
     // it directly specifies the repetition count and does not use the 'R' parameter.
