@@ -11,6 +11,12 @@ public:
     /// Notifies print host about print being paused
     static void pause();
 
+    /// Called when the serial print enters state "printing"
+    /// Restarts the inactivity timeout, so that the time the arming command
+    /// spent blocking (e.g. M109 waiting for temperature) is not counted
+    /// as inactivity.
+    static void print_started();
+
     /// periodically called when in state "printing"
     static void print_loop();
 
