@@ -1,4 +1,5 @@
 add_subdirectory(cyphal_node_stubs)
+add_subdirectory(indx_fault_status)
 add_subdirectory(minimal_cyphal_node)
 
 add_executable(

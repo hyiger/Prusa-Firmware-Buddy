@@ -1,4 +1,5 @@
 #include <puppies/INDX.hpp>
+#include <puppies/indx_fault_status.hpp>
 
 #include <utility>
 
@@ -57,20 +58,8 @@ void Indx::handle_fault_status(indx_head::errors::FaultStatusMask fault) {
     }
 
     log_error(INDX, "Fault status: %d", std::to_underlying(fault));
-    auto has_fault = [=](indx_head::errors::FaultStatusMask tested) {
-        return std::to_underlying(fault) & std::to_underlying(tested);
-    };
-    if (has_fault(indx_head::errors::FaultStatusMask::board_min_temp)) {
-        fatal_error(ErrCode::ERR_TEMPERATURE_INDX_HEAD_BOARD_MINTEMP_ERR);
-    }
-    if (has_fault(indx_head::errors::FaultStatusMask::board_max_temp)) {
-        fatal_error(ErrCode::ERR_TEMPERATURE_INDX_HEAD_BOARD_MAXTEMP_ERR);
-    }
-    if (has_fault(indx_head::errors::FaultStatusMask::tpis_ambient_min_temp)) {
-        fatal_error(ErrCode::ERR_TEMPERATURE_INDX_HEAD_TPIS_AMBIENT_MINTEMP_ERR);
-    }
-    if (has_fault(indx_head::errors::FaultStatusMask::tpis_ambient_max_temp)) {
-        fatal_error(ErrCode::ERR_TEMPERATURE_INDX_HEAD_TPIS_AMBIENT_MAXTEMP_ERR);
+    if (const auto error_code = indx_fault_status::fatal_error_code(fault)) {
+        fatal_error(*error_code);
     }
 
     // Acknowledge the fault — write_general() will flush this and reset it to 0 after success.
@@ -171,6 +160,16 @@ CommunicationStatus Indx::initial_scan(PuppyModbus &bus) {
     // The intention is that when someone detects a reset, we want to guarantee that the data is already marked as invalid
     // and will become valid again only after it is properly fetched from the newly reset puppy.
     reset_counter++;
+
+    // The head latches its fault status across its own resets. Check it before
+    // pushing the heating target, so a head that shut down on a thermal fault is
+    // never heated again.
+    ModbusInputRegisterBlock<indx_head::modbus::Status::address, indx_head::modbus::Status> block {};
+    const CommunicationStatus status = bus.read(unit, block, 0);
+    if (status == CommunicationStatus::ERROR) {
+        return status;
+    }
+    handle_fault_status(block.value.fault_status);
 
     return write_general(bus);
 }
