@@ -5,6 +5,10 @@
 
 uint32_t SerialPrinting::last_serial_indicator_ms = 0;
 
+void SerialPrinting::print_started() {
+    last_serial_indicator_ms = ticks_ms();
+}
+
 void SerialPrinting::print_loop() {
     if (has_serial_timeouted()) {
         marlin_server::serial_print_finalize();

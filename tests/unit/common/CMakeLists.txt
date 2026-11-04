@@ -9,6 +9,7 @@ add_subdirectory(filament_sensor)
 add_subdirectory(freertos)
 add_subdirectory(st25dv64k)
 add_subdirectory(power_panic)
+add_subdirectory(serial_printing)
 
 add_executable(
   support_utils_tests ${CMAKE_CURRENT_SOURCE_DIR}/support_utils_lib_test.cpp

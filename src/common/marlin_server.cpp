@@ -2446,6 +2446,7 @@ static void _server_print_loop(void) {
 
 #if HAS_SERIAL_PRINT()
         if (server.print_is_serial) {
+            SerialPrinting::print_started();
             fsm_create(PhasesSerialPrinting::active);
         } else
 #endif
