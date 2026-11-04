@@ -136,35 +136,44 @@ std::optional<FilamentColor> pick_color(const string_view_utf8 &title, FilamentC
     return pick(title, current);
 }
 
+std::optional<FilamentSpool> pick_spool(FilamentSpool start, bool ask_color) {
+    FilamentSpool spool = start;
+    while (true) {
+        const auto vendor = pick_vendor(_("VENDOR"), spool.vendor);
+        if (!vendor) {
+            return std::nullopt;
+        }
+        spool.vendor = *vendor;
+
+        if (!ask_color) {
+            spool.color = {};
+            return spool;
+        }
+
+        // Going back from the color returns to the vendor
+        if (const auto color = pick_color(_("COLOR"), spool.color)) {
+            spool.color = *color;
+            return spool;
+        }
+    }
+}
+
 bool pick_spool_for_load(FilamentType &type, std::variant<VirtualToolIndex, AllTools> tool) {
     const auto *virtual_tool = std::get_if<VirtualToolIndex>(&tool);
     if (!virtual_tool) {
         return true;
     }
 
-    FilamentSpool spool = FilamentSpool::previous_for_tool(*virtual_tool);
-    while (true) {
-        const auto vendor = pick_vendor(_("VENDOR"), spool.vendor);
-        if (!vendor) {
-            return false;
-        }
-        spool.vendor = *vendor;
-
-        // An ad-hoc filament, such as a Custom one, comes with the color the user just set up
-        if (type.is_adhoc()) {
-            spool.color = {};
-            FilamentSpool::pick_for_load(*virtual_tool, type, spool);
-            return true;
-        }
-
-        // Going back from the color returns to the vendor
-        if (const auto color = pick_color(_("COLOR"), spool.color)) {
-            spool.color = *color;
-            type = filament::apply_load_color(type, *virtual_tool, spool.color.color());
-            FilamentSpool::pick_for_load(*virtual_tool, type, spool);
-            return true;
-        }
+    // An ad-hoc filament, such as a Custom one, comes with the color the user just set up
+    const auto spool = pick_spool(FilamentSpool::previous_for_tool(*virtual_tool), !type.is_adhoc());
+    if (!spool) {
+        return false;
     }
+    if (!type.is_adhoc()) {
+        type = filament::apply_load_color(type, *virtual_tool, spool->color.color());
+    }
+    FilamentSpool::pick_for_load(*virtual_tool, type, *spool);
+    return true;
 }
 
 } // namespace filament_library_dialog
