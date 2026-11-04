@@ -1418,9 +1418,8 @@ void Pause::manual_unload_process([[maybe_unused]] Response entry_response) {
     };
 #endif
     while (true) {
-        const bool has_filament = FSensors_instance().has_filament_surely(LogicalFilamentSensor::extruder)
-            || (!FSensors_instance().sensor(LogicalFilamentSensor::extruder) && FSensors_instance().has_filament_surely(LogicalFilamentSensor::side));
-        const bool can_continue = !has_filament;
+        // The tool may be parked by now, so ask its own sensors rather than the selected tool's
+        const bool can_continue = !tool_has_filament_surely(settings.physical_tool());
         const PhasesLoadUnload phase = can_continue ? PhasesLoadUnload::ManualUnload_continuable : PhasesLoadUnload::ManualUnload_uncontinuable;
         setPhase(phase);
 

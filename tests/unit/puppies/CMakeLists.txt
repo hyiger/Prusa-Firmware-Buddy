@@ -13,3 +13,10 @@ target_include_directories(
 target_link_libraries(time_sync SG14 buddy_utils)
 
 add_catch_test(time_sync)
+
+add_executable(nozzle_presence_cache ${CMAKE_CURRENT_SOURCE_DIR}/nozzle_presence_cache.cpp)
+target_include_directories(
+  nozzle_presence_cache PUBLIC ${CMAKE_SOURCE_DIR}/include
+                               ${CMAKE_SOURCE_DIR}/src/module/indx_head/include
+  )
+add_catch_test(nozzle_presence_cache)

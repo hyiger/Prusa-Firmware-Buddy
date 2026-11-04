@@ -79,16 +79,10 @@ void Indx::handle_fault_status(indx_head::errors::FaultStatusMask fault) {
 }
 
 void Indx::handle_nozzle_presence(uint16_t nozzle_present, uint16_t nozzle_invalidation_ack) {
-    // Trust nozzle data only when both are true:
-    //  1. Head echoed back our invalidation token (debouncer was reset)
-    //  2. Head reports a definitive result (not unknown — debouncer has settled with fresh samples)
-    using indx_head::NozzlePresence;
-    const auto presence = static_cast<NozzlePresence>(nozzle_present);
-    const bool has_definitive_result = presence != NozzlePresence::unknown;
-    const bool head_acknowledged = nozzle_invalidation_ack == nozzle_invalidation_token.load();
-    const bool valid = has_definitive_result && head_acknowledged;
-
-    nozzle_state.store(valid ? presence : NozzlePresence::unknown);
+    // The head resets its debouncer when it acknowledges a new token and reports unknown until
+    // the debouncer settles with fresh samples, so a definitive report carrying the current token
+    // describes the nozzle after the last invalidation.
+    nozzle_presence.publish(static_cast<indx_head::NozzlePresence>(nozzle_present), nozzle_invalidation_ack);
 }
 
 void Indx::handle_time_sync(uint32_t time_sync_hi, uint32_t time_sync_lo, const RequestTiming &timing) {
@@ -273,7 +267,7 @@ CommunicationStatus Indx::write_general(PuppyModbus &bus) {
     block.value.selftest_mode = selftest_mode_.load() ? 1u : 0u;
     block.value.nozzle_target_temperature = nozzle_target_temperature_desired.load();
     block.value.hotend_temperature_compensation_c100 = hotend_temperature_compensation_c100_desired.load();
-    block.value.invalidate_nozzle_presence = nozzle_invalidation_token.load();
+    block.value.invalidate_nozzle_presence = nozzle_presence.token();
     block.value.print_fan_pwm.value = static_cast<uint8_t>(fan_pwm_desired[fans::PRINTFAN_INDEX].load());
     block.value.leds = leds;
     block.value.loadcell_enabled = loadcell_enabled ? 1u : 0u;
@@ -383,28 +377,17 @@ float Indx::get_24V() {
 
 std::optional<bool> Indx::get_nozzle_present() {
     // Called from Marlin - keep lockfree.
-    const auto state = nozzle_state.load();
-    if (state == indx_head::NozzlePresence::unknown) {
-        return std::nullopt;
-    }
-
-    return state == indx_head::NozzlePresence::present;
+    return nozzle_presence.get();
 }
 
 void Indx::invalidate_nozzle_data() {
-    // Generate a new token. The head will reset its debouncer and echo the
-    // token back in nozzle_invalidation_ack. handle_nozzle_presence() won't
-    // re-validate until the ack matches.
+    // Any new token makes the head reset its debouncer and echo the token back.
     uint16_t token = static_cast<uint16_t>(ticks_ms());
     if (token == 0) {
         token = 1; // Avoid 0 — it's the head's initial ack value
     }
-    // Bump the token before clearing the cache: handle_nozzle_presence() running on
-    // the puppy task can race with this function and write back the previous (now stale)
-    // state if it observes the old token still matching the head's old ack.
-    nozzle_invalidation_token.store(token);
+    nozzle_presence.invalidate(token);
     general_write_dirty.store(true);
-    nozzle_state.store(indx_head::NozzlePresence::unknown);
 }
 
 std::optional<uint32_t> Indx::get_register_general_status_last_read_ms() const {

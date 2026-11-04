@@ -15,6 +15,7 @@
 #include <include/dwarf_registers.hpp>
 #include <utils/utility_extensions.hpp>
 #include <puppies/dwarf_status_led.hpp>
+#include <puppies/nozzle_presence_cache.hpp>
 #include <indx_head/errors.hpp>
 #include <indx_head/leds.hpp>
 #include <utils/color.hpp>
@@ -181,13 +182,8 @@ public:
 private:
     OTP_v5 otp = {};
 
-    /// Cached nozzle presence for use by Marlin.
-    ///
-    /// (encodes validity too).
-    std::atomic<indx_head::NozzlePresence> nozzle_state { indx_head::NozzlePresence::unknown };
-    static_assert(std::atomic<indx_head::NozzlePresence>::is_always_lock_free);
-
-    std::atomic<uint16_t> nozzle_invalidation_token { 0 }; ///< Token sent to head; data is valid only after head echoes it back nozzle_invalidation_ack from INDX_HEAD
+    /// Nozzle presence for use by Marlin, together with the invalidation token sent to the head
+    NozzlePresenceCache nozzle_presence;
 
     // Hotend temperature fields — populated from read_general_status(), read lock-free by Marlin.
     std::atomic<int16_t> hotend_temp_compensated_c100 { indx_head::modbus::default_hotend_temperature_c100 };
@@ -266,7 +262,7 @@ private:
     bool dispatch_log_event();
     CommunicationStatus read_general_status(PuppyModbus &);
     void handle_fault_status(indx_head::errors::FaultStatusMask fault);
-    void handle_nozzle_presence(uint16_t nozzle_present, uint16_t nozzle_invalidation_ack); ///< Update nozzle_state
+    void handle_nozzle_presence(uint16_t nozzle_present, uint16_t nozzle_invalidation_ack); ///< Update nozzle_presence
     void handle_time_sync(uint32_t time_sync_hi, uint32_t time_sync_lo, const RequestTiming &);
 
     // Register refresh control

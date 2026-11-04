@@ -388,6 +388,13 @@ FilamentSensors &FSensors_instance() {
     return ret;
 }
 
+bool tool_has_filament_surely(PhysicalToolIndex tool) {
+    const auto state = [](IFSensor *fs) -> std::optional<FilamentSensorState> {
+        return fs ? std::optional(fs->get_state()) : std::nullopt;
+    };
+    return has_filament_surely_in_path(state(GetExtruderFSensor(tool)), state(GetSideFSensor(tool)));
+}
+
 bool should_enable(FilamentSensorID id) {
 #if HAS_MMU2()
     /// MMU override: when MMU is active, both extruder and side sensors
