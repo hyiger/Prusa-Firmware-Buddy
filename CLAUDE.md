@@ -11,7 +11,8 @@ Firmware for the Original Prusa 32-bit printers: MINI/MINI+, MK3.5(S), MK3.9(S),
 
 **Cloud sessions** (Claude Code on the web): `.claude/hooks/session-start.sh` prepares the container before the session starts.
 - It installs gettext and creates `.venv` (Python 3.12, `requirements.txt`), which it puts on `PATH`.
-- It fetches the pinned tools from `utils/bootstrap.py` that the network allows. Its output says what is missing, e.g. the ARM toolchain when `developer.arm.com` is blocked.
+- It fetches the pinned tools from `utils/bootstrap.py` that the network allows, including the ESP8266 SDK for the Wi-Fi firmware that firmware builds include (not the XL's `esp-idf`). Its output says what is missing, e.g. the ARM toolchain when `developer.arm.com` is blocked.
+- Unit tests don't need the ARM toolchain or an ESP SDK; native builds skip the Wi-Fi firmware.
 
 ### Unit tests (host GCC, no ARM toolchain needed)
 
