@@ -22,6 +22,10 @@ on:
         description: "Publish a GitHub release with the built .bbf files"
         type: boolean
         default: false
+      replace_release:
+        description: "Move an existing release's tag to the built commit and replace its files"
+        type: boolean
+        default: false
   push:
     branches:
       - "**"
@@ -164,13 +168,19 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
           BASE_VERSION: ${{ steps.version.outputs.base }}
           VERSION: ${{ steps.version.outputs.version }}
+          REPLACE_RELEASE: ${{ inputs.replace_release }}
         run: |
           set -euo pipefail
           # A manual run tags the built commit, so it must not publish under a
-          # tag that already names another one.
+          # tag that already names another one, unless asked to replace it.
           if tagged="$(git rev-parse -q --verify "refs/tags/${TAG}^{commit}")" && [ "${tagged}" != "${GITHUB_SHA}" ]; then
-            echo "::error::Tag ${TAG} already points at ${tagged}; build under another prerelease tag"
-            exit 1
+            if [ "${REPLACE_RELEASE}" != "true" ]; then
+              echo "::error::Tag ${TAG} already points at ${tagged}; build under another prerelease tag, or run with replace_release"
+              exit 1
+            fi
+            echo "Moving tag ${TAG} from ${tagged} to ${GITHUB_SHA}"
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${TAG}" \
+              -f sha="${GITHUB_SHA}" -F force=true >/dev/null
           fi
           # envsubst takes the names of the variables it substitutes, unexpanded
           # shellcheck disable=SC2016
@@ -194,7 +204,7 @@ jobs:
 
           Filament > Filament Slots lists the tools with the vendor, type and color of the filament in each, and corrects them without reloading. Changing the type there changes the loaded filament type without loading anything, as `M865 L` does. A vendor or color changed there, or with `M866`, is what PrusaLink and the tool mapping screen show; Prusa Connect keeps showing the color picked at the load.
 
-          There are 16 preset vendors (Generic, Prusament, Polymaker, Bambu Lab, eSun, Elegoo, Sunlu, Overture, Hatchbox, Inland, 3D-Fuel, Fillamentum, Fiberlogy, Spectrum, Extrudr, colorFabb) and 16 preset colors (Red, Green, Blue, Cyan, Magenta, Yellow, Black, White, Orange, Brown, Gray, Purple, Pink, Silver, Natural, Gold), plus 8 user slots for each. Orange is the orange of the printer's own interface, #F8651B, as web orange looks yellow on its display. Filament > Manage Filaments has Edit Vendors and Edit Colors to name the user slots and set the hex code of a user color, and Enable Vendors and Enable Colors to choose which entries the lists show.
+          There are 16 preset vendors, listed with Generic first and the rest alphabetically (Generic, 3D-Fuel, Bambu Lab, colorFabb, Elegoo, eSun, Fiberlogy, Fillamentum, Hatchbox, Inland, Overture, Polymaker, Prusament, Siraya Tech, Spectrum, Sunlu), and 16 preset colors (Red, Green, Blue, Cyan, Magenta, Yellow, Black, White, Orange, Brown, Gray, Purple, Pink, Silver, Natural, Gold), plus 8 user slots for each. Orange is the orange of the printer's own interface, #F8651B, as web orange looks yellow on its display. Filament > Manage Filaments has Edit Vendors and Edit Colors to name the user slots and set the hex code of a user color, and Enable Vendors and Enable Colors to choose which entries the lists show.
 
           PrusaLink reports the slots at `/api/v1/tools`, with the same credentials as its other requests, and `M866 T<tool> V"<vendor>" C"<color>"` sets them from G-code. PrusaSlicer Filament Edition 1.16.0 and later read them with Sync Filaments from Printer, which works only over PrusaLink, not over Prusa Connect. Setup steps with screenshots are in the [Filament Slots and Sync user guide](https://github.com/hyiger/PrusaSlicer/wiki/Filament-Slots-and-Sync).
 
@@ -218,6 +228,7 @@ jobs:
           if gh release view "${TAG}" >/dev/null 2>&1; then
             gh release upload "${TAG}" dist/*.bbf dist/SHA256SUMS --clobber
             gh release edit "${TAG}" \
+              --target "${GITHUB_SHA}" \
               --title "${title}" \
               --notes-file notes.md \
               --prerelease
