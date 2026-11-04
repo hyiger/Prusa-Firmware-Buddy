@@ -1645,39 +1645,8 @@ void serial_print_finalize(void) {
 #endif
 
 void print_abort(void) {
-
-    switch (server.print_state) {
-
-#if HAS_POWER_PANIC()
-    case State::PowerPanic_Resume:
-    case State::PowerPanic_AwaitingResume:
-#endif
-    case State::Printing:
-    case State::Paused:
-    case State::MediaErrorRecovery_BufferData:
-    case State::Resuming_BufferData:
-    case State::Resuming_Reheating:
-    case State::Finishing_WaitIdle:
-#if HAS_TOOL_CRASH_RECOVERY()
-    case State::CrashRecovery_Tool_Pickup:
-#endif
-        server.print_state = State::Aborting_Begin;
-        break;
-
-    case State::PrintInit:
-    case State::SerialPrintInit:
-    case State::PrintPreviewInit:
-    case State::PrintPreviewImage:
-    case State::PrintPreviewConfirmed:
-    case State::PrintPreviewQuestions:
-#if HAS_TOOL_MAPPING()
-    case State::PrintPreviewToolsMapping:
-#endif
-        server.print_state = State::Aborting_Preview;
-        break;
-
-    default:
-        break;
+    if (const auto target = print_abort_target(server.print_state)) {
+        server.print_state = *target;
     }
 }
 
@@ -2998,6 +2967,9 @@ static void _server_print_loop(void) {
         // NOTE: endstops.enable_globally(false) above remains in effect through
         // resuming_begin(); a fallback tool_change() that needs G28 would silently fail to home.
         (void)prusa_toolchanger.recover_pp_toolchange(rd, active_tool, tc.phase);
+        if (server.print_state != State::PowerPanic_FinishIndxToolchange) {
+            break; // Aborted during the pickup
+        }
         server.print_state = State::Resuming_Begin;
         break;
     }
@@ -3302,7 +3274,12 @@ void resuming_begin(void) {
     //
     // And waiting after they've heat up wouldn't work, for obivous reasons.
     if (server.resume.active_tool != PrusaToolChanger::MARLIN_NO_TOOL_PICKED) {
-        tool_change(PhysicalToolIndex::from_raw(server.resume.active_tool), tool_return_t::no_return);
+        const bool picked = tool_change(PhysicalToolIndex::from_raw(server.resume.active_tool), tool_return_t::no_return);
+        server.print_state = state_after_resume_pickup(server.print_state, picked);
+        if (server.print_state != State::Resuming_Begin) {
+            log_warning(MarlinServer, "Resume tool pickup %s, not resuming", picked ? "interrupted" : "failed");
+            return;
+        }
         // Crash recovery must resume in place, without the park detour
         if (!crash_s.did_trigger()) {
             // Park for the reheat and the long Z return; on INDX the park position is over the wastebin

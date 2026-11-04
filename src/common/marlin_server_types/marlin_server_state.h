@@ -2,8 +2,11 @@
 
 #include <option/has_indx.h>
 #include <option/has_mmu2.h>
+#include <option/has_power_panic.h>
 #include <option/has_tool_crash_recovery.h>
 #include <option/has_tool_mapping.h>
+
+#include <optional>
 
 namespace marlin_server {
 
@@ -80,6 +83,59 @@ inline bool is_pausing_state(State state) {
 inline bool is_resuming_state(State state) {
     return (state == State::Resuming_BufferData) || (state == State::Resuming_Begin) || (state == State::Resuming_Reheating) || (state == State::Resuming_UnparkHead_XY) || (state == State::Resuming_UnparkHead_ZE) || (state == State::MediaErrorRecovery_BufferData);
 }
+
+/// State that print_abort() switches to from @p state; nullopt when the print cannot be aborted from it.
+inline std::optional<State> print_abort_target(State state) {
+    switch (state) {
+
+#if HAS_POWER_PANIC()
+    case State::PowerPanic_Resume:
+    case State::PowerPanic_AwaitingResume:
+#endif
+#if HAS_INDX()
+    // The INDX tool pickup blocks in these states, and its failure dialog offers Abort
+    case State::Resuming_Begin:
+    case State::PowerPanic_FinishIndxToolchange:
+#endif
+    case State::Printing:
+    case State::Paused:
+    case State::MediaErrorRecovery_BufferData:
+    case State::Resuming_BufferData:
+    case State::Resuming_Reheating:
+    case State::Finishing_WaitIdle:
+#if HAS_TOOL_CRASH_RECOVERY()
+    case State::CrashRecovery_Tool_Pickup:
+#endif
+        return State::Aborting_Begin;
+
+    case State::PrintInit:
+    case State::SerialPrintInit:
+    case State::PrintPreviewInit:
+    case State::PrintPreviewImage:
+    case State::PrintPreviewConfirmed:
+    case State::PrintPreviewQuestions:
+#if HAS_TOOL_MAPPING()
+    case State::PrintPreviewToolsMapping:
+#endif
+        return State::Aborting_Preview;
+
+    default:
+        return std::nullopt;
+    }
+}
+
+#if HAS_INDX()
+/// State to continue from after the blocking INDX tool pickup in Resuming_Begin returned @p picked.
+/// A transition raised during the pickup (such as the abort confirmed in its failure dialog) is kept;
+/// a failed pickup without one goes back to Paused instead of resuming without a tool.
+/// Resuming_Begin means the resume sequence goes on.
+inline State state_after_resume_pickup(State current, bool picked) {
+    if (current != State::Resuming_Begin) {
+        return current;
+    }
+    return picked ? State::Resuming_Begin : State::Paused;
+}
+#endif
 
 inline bool is_extended_paused_state(State state) {
     switch (state) {
