@@ -137,6 +137,11 @@ FilamentSensors &FSensors_instance();
 
 IFSensor *GetExtruderFSensor(PhysicalToolIndex tool);
 IFSensor *GetSideFSensor(PhysicalToolIndex tool);
+
+/// \returns whether filament surely remains in \p tool's filament path, read from the tool's own
+/// sensors regardless of which tool is selected (see has_filament_surely_in_path)
+/// Thread-safe
+bool tool_has_filament_surely(PhysicalToolIndex tool);
 /// Whether a sensor should be enabled based on config store settings.
 ///
 /// Safe to call at any time including boot.
