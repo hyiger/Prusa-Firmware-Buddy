@@ -212,6 +212,22 @@ struct FilamentSpool {
     /// Takes the pick accepted for it, if any, and the same type. Any other load drops the pick.
     static void start_load(FilamentType type);
 
+    /// Remembers \p spool, picked in the GUI for a filament change of \p tool during a print.
+    /// Called from the GUI thread, before it injects the M600 the pick belongs to.
+    /// Kept apart from picks for loads, so that only a filament change takes it.
+    static void pick_for_change(VirtualToolIndex tool, FilamentSpool spool);
+
+    /// Called from the GUI thread when the M600 a pick was made for could not be injected.
+    static void withdraw_change_pick();
+
+    /// Called by the Marlin thread when a filament change starts. Takes any pick waiting for a
+    /// change, so none outlives the change after it. \returns the pick if it was made for \p tool.
+    static std::optional<FilamentSpool> take_change_pick(VirtualToolIndex tool);
+
+    /// Called by the Marlin thread after start_load, when a filament change loads into \p tool.
+    /// The change ends up with \p spool, as a load does with its pick.
+    static void keep_for_change(VirtualToolIndex tool, FilamentSpool spool);
+
     /// Called each time the load marks its filament as loaded in \p tool, which a load can do
     /// several times, such as after the filament is pulled out and pushed back in.
     /// Assigns the spool taken by start_load. Without one, clears the spool if \p clear_without_pick,

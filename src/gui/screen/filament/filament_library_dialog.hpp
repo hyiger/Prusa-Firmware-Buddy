@@ -19,6 +19,11 @@ std::optional<FilamentVendor> pick_vendor(const string_view_utf8 &title, Filamen
 /// Lets the user pick None or a color, each shown with its swatch, like pick_vendor
 std::optional<FilamentColor> pick_color(const string_view_utf8 &title, FilamentColor current);
 
+/// Asks for a vendor, then a color unless \p ask_color is false, each list starting at \p start.
+/// Going back from the colors returns to the vendors.
+/// \returns std::nullopt if the user went back from the vendors
+std::optional<FilamentSpool> pick_spool(FilamentSpool start, bool ask_color);
+
 /// Asks for the vendor and color of the filament about to be loaded into \p tool, once its type is picked.
 /// Applies to loads into a single tool. The pickers start at the tool's previous spool.
 /// A picked color is applied to \p type for this load, as the color prompt does.

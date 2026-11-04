@@ -13,6 +13,11 @@
 
 #include <option/has_toolchanger.h>
 #include <bsod/bsod.h>
+#include <option/has_filament_slots.h>
+#if HAS_FILAMENT_SLOTS()
+    #include <filament_library.hpp>
+    #include <gui/screen/filament/filament_library_dialog.hpp>
+#endif
 #if HAS_TOOLCHANGER()
     #include <Marlin/src/module/prusa/toolchanger.h>
     #include <gui/dialogs/dialog_tool_select.hpp>
@@ -32,7 +37,25 @@ bool inject(VirtualToolIndex tool) {
     if (msg_answer != Response::Yes) {
         return false;
     }
-    marlin_client::inject(GCodeLiteral("M600 P T%.0f", static_cast<float>(tool.to_raw())));
+
+#if HAS_FILAMENT_SLOTS()
+    // Like a load from the Filament menu, which this setting also governs
+    if (config_store().should_load_ask_for_filament_color()) {
+        const auto spool = filament_library_dialog::pick_spool(FilamentSpool::for_tool(tool), true);
+        // The print may have ended while the lists were open
+        if (!spool || !marlin_client::is_printing()) {
+            return false;
+        }
+        FilamentSpool::pick_for_change(tool, *spool);
+    }
+#endif
+
+    if (!marlin_client::inject(GCodeLiteral("M600 P T%.0f", static_cast<float>(tool.to_raw())))) {
+#if HAS_FILAMENT_SLOTS()
+        FilamentSpool::withdraw_change_pick();
+#endif
+        return false;
+    }
     return true;
 }
 
