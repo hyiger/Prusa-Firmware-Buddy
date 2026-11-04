@@ -87,6 +87,9 @@ bool PrusaToolChanger::pick_any_tool(tool_return_t return_type, xyz_pos_t return
         if (tool_change(tool, return_type, return_position, z_lift, z_return)) {
             return true;
         }
+        if (failure_aborted) {
+            return false; // Trying the next tool would override the abort
+        }
     }
     return false;
 }
@@ -95,6 +98,7 @@ bool PrusaToolChanger::tool_change(const std::variant<PhysicalToolIndex, NoTool>
     // WARNING: called from default(marlin) task
 
     quick_stopped = false;
+    failure_aborted = false;
 
     // Prevent recursion
     if (block_tool_check.load()) {
@@ -719,6 +723,7 @@ PrusaToolChanger::ToolchangeFailureAction PrusaToolChanger::handle_pickup_failur
 
 PrusaToolChanger::ToolchangeFailureAction PrusaToolChanger::apply_failure_action(ToolchangeFailureAction action) {
     if (action == ToolchangeFailureAction::abort) {
+        failure_aborted = true;
         marlin_server::print_abort();
     }
 

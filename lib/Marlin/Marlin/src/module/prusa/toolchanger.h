@@ -152,6 +152,7 @@ public:
     /**
      * @brief Try to pick any enabled tool, iterating through all of them.
      * Useful when we need some tool picked but don't care which one.
+     * On INDX, a toolchange aborted from its failure dialog ends the search.
      * @param return_type whether to return to previous position
      * @param return_position where to return to
      * @param z_lift select if printer should do Z lift before moving
@@ -354,6 +355,9 @@ private:
      * @brief Apply common failure side-effects and return the action for caller control flow.
      */
     ToolchangeFailureAction apply_failure_action(ToolchangeFailureAction action);
+
+    /// The current toolchange failed with ToolchangeFailureAction::abort
+    bool failure_aborted = false;
 
     /**
      * @brief Pickup tool.
