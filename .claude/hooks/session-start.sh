@@ -92,9 +92,11 @@ result_out, sys.stdout = sys.stdout, sys.stderr
 bootstrap.dependencies_dir.mkdir(parents=True, exist_ok=True)
 
 required = ('cmake', 'ninja', 'clang-format')
+# The ESP8266 SDK builds the Wi-Fi module's firmware, which every firmware build but the XL's
+# includes. The XL's esp-idf is left to bootstrap.py.
 wanted = [
     dep for dep in bootstrap.dependencies
-    if dep in required or dep == 'gcc-arm-none-eabi'
+    if dep in required or dep in ('gcc-arm-none-eabi', 'esp8266-rtos-sdk')
     or dep.startswith(('bootloader-', 'firmware-'))
 ]
 
@@ -116,6 +118,22 @@ print(' '.join(missing), file=result_out)
 EOF
 )"
 
+# Installing the ESP8266 SDK puts its Python packages into .venv. A reused SDK, such as one kept
+# while .venv was recreated, still needs them there: the Wi-Fi firmware build checks for them.
+esp_sdk="$(ls -d .dependencies/esp8266-rtos-sdk-* 2>/dev/null | head -n 1 || true)"
+if [ -n "$esp_sdk" ] && [ -f "$esp_sdk/requirements.txt" ]; then
+    esp_hash="$(sha256sum "$esp_sdk/requirements.txt" | cut -d' ' -f1)"
+    if [ "$(cat .venv/.esp8266-requirements.sha256 2>/dev/null)" != "$esp_hash" ]; then
+        log "installing $esp_sdk/requirements.txt into .venv"
+        if PIP_CONSTRAINT="$esp_sdk/pip-constraint.txt" .venv/bin/python -m pip install \
+            --disable-pip-version-check --no-input -q -r "$esp_sdk/requirements.txt" >&2; then
+            echo "$esp_hash" >.venv/.esp8266-requirements.sha256
+        else
+            tools_status="$tools_status esp8266-rtos-sdk(python-packages)"
+        fi
+    fi
+fi
+
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
     {
         echo "export VIRTUAL_ENV=\"$PWD/.venv\""
@@ -130,9 +148,13 @@ else
 fi
 echo "Buddy dev environment ready: .venv ($(.venv/bin/python --version)) with requirements.txt $venv_note," \
     "gettext installed, pinned cmake/ninja/clang-format 16 in .dependencies/." \
-    "Unit tests: python3 utils/build_tests.py --run -- -LE slow."
+    "Unit tests are ready: python3 utils/build_tests.py --run -- -LE slow."
+tools_status="${tools_status# }"
 if [ -n "$tools_status" ]; then
     echo "Not installed (download blocked or failed): $tools_status." \
-        "Without gcc-arm-none-eabi, firmware builds are unavailable in this session;" \
-        "do not substitute a distro arm-none-eabi-gcc."
+        "Firmware builds need gcc-arm-none-eabi and esp8266-rtos-sdk, so they are unavailable in" \
+        "this session; do not substitute a distro arm-none-eabi-gcc." \
+        "XL builds also need esp-idf, which this hook does not install."
+else
+    echo "Firmware builds are ready, except the XL's, whose esp-idf this hook does not install."
 fi
