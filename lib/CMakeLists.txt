@@ -32,4 +32,8 @@ include(AddSFLLibrary.cmake)
 include(AddCanard.cmake)
 include(AddO1heap.cmake)
 include(AddCMSIS-DSP.cmake)
-include(AddEspNic.cmake)
+# The Wi-Fi module's firmware only goes into the firmware's resources, so native unit tests skip it
+# and don't need its SDK
+if(CMAKE_CROSSCOMPILING)
+  include(AddEspNic.cmake)
+endif()
