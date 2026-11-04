@@ -3,6 +3,8 @@
 #include <bsod/bsod.h>
 #include <utils/bitset_utils.hpp>
 
+#include <algorithm>
+
 #ifndef UNITTESTS
     // Used by generate_filament_list() below, which is itself UNITTESTS-excluded.
     #include <tool/physical_tool.hpp>
@@ -143,7 +145,9 @@ void generate_filament_list(FilamentList &list, const GenerateFilamentListConfig
         }
     });
 
-    // Unless we're filtering, we should always end up returning all the filaments
-    debug_assert(list.size() == all_filament_types.size() || config.visible_only || !std::holds_alternative<NoTool>(config.compatible_with_tool));
+    // Unless we're filtering, we should always end up returning all the filaments, and the enforced one
+    // if it isn't one of them
+    const bool enforced_is_extra = config.enforce_first_item && std::ranges::find(all_filament_types, config.enforce_first_item) == all_filament_types.end();
+    debug_assert(list.size() == all_filament_types.size() + enforced_is_extra || config.visible_only || !std::holds_alternative<NoTool>(config.compatible_with_tool));
 }
 #endif

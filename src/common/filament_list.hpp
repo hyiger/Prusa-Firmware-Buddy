@@ -7,7 +7,9 @@
 
 #include "filament.hpp"
 
-using FilamentList = stdext::inplace_vector<FilamentType, total_filament_type_count>;
+/// Room for every preset and user filament type, plus one more: the enforce_first_item of
+/// GenerateFilamentListConfig can be a type outside them, such as a tool's ad-hoc filament.
+using FilamentList = stdext::inplace_vector<FilamentType, total_filament_type_count + 1>;
 
 /// List of all filaments, in the order that makes kind of sense to the user
 /// !!! Order of items in the list can change between builds. Do not rely on it.
