@@ -30,7 +30,7 @@ constexpr EnumArray<PresetFilamentVendor, const char *, PresetFilamentVendor::_c
     { PresetFilamentVendor::fillamentum, "Fillamentum" },
     { PresetFilamentVendor::fiberlogy, "Fiberlogy" },
     { PresetFilamentVendor::spectrum, "Spectrum" },
-    { PresetFilamentVendor::extrudr, "Extrudr" },
+    { PresetFilamentVendor::siraya_tech, "Siraya Tech" },
     { PresetFilamentVendor::colorfabb, "colorFabb" },
 };
 
@@ -226,6 +226,42 @@ static_assert(!FilamentVendor::from_data(FilamentVendor::preset_count + 1));
 static_assert(!FilamentVendor::from_data(FilamentVendor::user_data_offset + user_filament_vendor_count));
 static_assert(!FilamentSpool {}.vendor && !FilamentSpool {}.color);
 static_assert(FilamentVendor::all()[FilamentVendor::preset_count] == FilamentVendor::user(0));
+
+namespace {
+
+constexpr char ascii_lower(char c) {
+    return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+}
+
+constexpr bool name_less(std::string_view a, std::string_view b) {
+    return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(), [](char x, char y) {
+        return ascii_lower(x) < ascii_lower(y);
+    });
+}
+
+constexpr bool is_preset_vendor_order_valid() {
+    constexpr auto &order = preset_filament_vendor_order;
+    for (size_t i = 0; i < order.size(); i++) {
+        for (size_t j = i + 1; j < order.size(); j++) {
+            if (order[i] == order[j]) {
+                return false;
+            }
+        }
+    }
+    if (order.front() != PresetFilamentVendor::generic) {
+        return false;
+    }
+    for (size_t i = 2; i < order.size(); i++) {
+        if (!name_less(preset_vendor_names[order[i - 1]], preset_vendor_names[order[i]])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // namespace
+
+static_assert(is_preset_vendor_order_valid(), "Preset vendors must be listed once each, Generic first, the rest alphabetically");
 
 namespace {
 

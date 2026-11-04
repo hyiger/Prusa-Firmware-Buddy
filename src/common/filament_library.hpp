@@ -39,7 +39,7 @@ enum class PresetFilamentVendor : uint8_t {
     fillamentum = 11,
     fiberlogy = 12,
     spectrum = 13,
-    extrudr = 14,
+    siraya_tech = 14,
     colorfabb = 15,
     _count
 };
@@ -63,6 +63,26 @@ enum class PresetFilamentColor : uint8_t {
     natural = 14,
     gold = 15,
     _count
+};
+
+/// Order of the preset vendors in the selection lists: Generic first, the rest alphabetically
+constexpr std::array<PresetFilamentVendor, std::to_underlying(PresetFilamentVendor::_count)> preset_filament_vendor_order {
+    PresetFilamentVendor::generic,
+    PresetFilamentVendor::three_d_fuel,
+    PresetFilamentVendor::bambu_lab,
+    PresetFilamentVendor::colorfabb,
+    PresetFilamentVendor::elegoo,
+    PresetFilamentVendor::esun,
+    PresetFilamentVendor::fiberlogy,
+    PresetFilamentVendor::fillamentum,
+    PresetFilamentVendor::hatchbox,
+    PresetFilamentVendor::inland,
+    PresetFilamentVendor::overture,
+    PresetFilamentVendor::polymaker,
+    PresetFilamentVendor::prusament,
+    PresetFilamentVendor::siraya_tech,
+    PresetFilamentVendor::spectrum,
+    PresetFilamentVendor::sunlu,
 };
 
 /// Number of user-definable vendors.
@@ -111,11 +131,15 @@ public:
         return result ? result : FilamentLibraryItem {};
     }
 
-    /// \returns all items: presets first, then user slots
+    /// \returns all items in the order of the selection lists: presets first, then user slots
     static constexpr std::array<FilamentLibraryItem, total_count> all() {
         std::array<FilamentLibraryItem, total_count> result;
         for (uint8_t i = 0; i < preset_count; i++) {
-            result[i] = preset(static_cast<Preset>(i));
+            if constexpr (std::is_same_v<Preset, PresetFilamentVendor>) {
+                result[i] = preset(preset_filament_vendor_order[i]);
+            } else {
+                result[i] = preset(static_cast<Preset>(i));
+            }
         }
         for (uint8_t i = 0; i < user_count; i++) {
             result[preset_count + i] = user(i);
