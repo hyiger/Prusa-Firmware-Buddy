@@ -8,7 +8,9 @@ using INDXTool = StandardFFFPhysicalTool<IndxHotend>;
 INDXTool &IndxHotend::indx_tool(PhysicalToolIndex tool) {
     static const IndxHotend::Config hotend_config {
         .min_nozzle_temp = 5,
-        .max_nozzle_temp = 305,
+        // Leaves a settable target of 300 °C after HEATER_MAXTEMP_SAFETY_MARGIN, which is
+        // the INDX head's own target clamp. The head independently shuts down at 330 °C.
+        .max_nozzle_temp = 315,
     };
     static StrongIndexArray<INDXTool, PhysicalToolIndex::count, PhysicalToolIndex, PhysicalToolIndex::to_raw_static> tools {
         INDXTool(PhysicalToolIndex::from_raw(0), &hotend_config),
