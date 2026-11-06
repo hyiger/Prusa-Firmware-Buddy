@@ -191,6 +191,7 @@ jobs:
 
           - **Filament slots**: each tool records the vendor and color of its filament, picked while loading the way an AMS does it. PrusaSlicer Filament Edition reads them over PrusaLink.
           - **Prusa Connect**: the printer reports the plain version to Connect, so uploads work.
+          - **Nozzle temperature**: INDX tools take targets up to 300 °C, where stock ${BASE_VERSION} stops at 290 °C. Not yet verified on hardware.
 
           The printer shows its version as `${VERSION}`, so it can be told apart from Prusa's build. Prusa Connect is the exception, see below.
 
@@ -213,6 +214,12 @@ jobs:
           Prusa Connect has turned off file transfer for firmware versions it does not recognize, such as one with a prerelease tag like `${VERSION}`. Uploads then failed with "The current printer firmware version do not support binary gcodes", and Connect marked the firmware as unsupported. This build reports the plain `${BASE_VERSION}` to Connect, without the prerelease tag or build number, so Connect shows `${BASE_VERSION}`. The printer's screens, PrusaLink and M115 still report `${VERSION}`, and M115, PrusaLink and Version Info add the build number after a `+`.
 
           Connect may offer a newer stock firmware as an update. Installing it replaces this build.
+
+          ### Nozzle temperature
+
+          Stock ${BASE_VERSION} caps an INDX tool's target at 290 °C, below the 300 °C the INDX head itself accepts. This build raises the printer's limit to match the head, so the menus, filament presets and `M104`/`M109` can set up to 300 °C. A higher target is still lowered to 300 °C without a message. The printer stops with a MAXTEMP error if a nozzle reads above 315 °C instead of 305 °C, and the INDX head still shuts its heater off on its own above 330 °C.
+
+          This has not been tested on a printer. Nobody has yet confirmed that a nozzle settles at 300 °C without overshooting into the MAXTEMP error, or checked the head's infrared temperature reading against a thermometer that high. Check this on your own printer before printing at 300 °C.
 
           ### Flashing
 
