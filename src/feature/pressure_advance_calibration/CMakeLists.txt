@@ -1,0 +1,1 @@
+target_sources(firmware PRIVATE pressure_advance_calibration.cpp pressure_advance_estimator.cpp)

@@ -9,6 +9,7 @@
 #include <option/has_indx.h>
 #include <option/has_nozzle_cleaner.h>
 #include <option/has_nozzle_cleaner_lite.h>
+#include <option/has_pressure_advance_calibration.h>
 
 #include "print_status_message_data.hpp"
 #include <inc/MarlinConfigPre.h>
@@ -65,6 +66,9 @@ struct PrintStatusMessage {
 #endif
 #if HAS_NOZZLE_CLEANER_LITE()
         nozzle_cleaner_lite,
+#endif
+#if HAS_PRESSURE_ADVANCE_CALIBRATION()
+        pressure_advance_calibrating,
 #endif
         _cnt
     };
@@ -143,6 +147,9 @@ struct PrintStatusMessage {
 #endif
 #if HAS_NOZZLE_CLEANER_LITE()
         TypeRecord<Type::nozzle_cleaner_lite, std::monostate>,
+#endif
+#if HAS_PRESSURE_ADVANCE_CALIBRATION()
+        TypeRecord<Type::pressure_advance_calibrating, PrintStatusMessageDataToolProgress>,
 #endif
 
         TypeRecord<Type::none, std::monostate>>;

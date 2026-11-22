@@ -52,6 +52,10 @@
 #if HAS_SPOOL_JOIN()
     #include <module/prusa/spool_join.hpp>
 #endif
+#include <option/has_pressure_advance_calibration.h>
+#if HAS_PRESSURE_ADVANCE_CALIBRATION()
+    #include <feature/pressure_advance_calibration/pressure_advance_calibration.hpp>
+#endif
 
 static_assert(HAS_TOOLCHANGER(), "Needs toolchanger");
 
@@ -207,6 +211,11 @@ std::expected<void, tool_offset::FailureReason> prepare_tool(PhysicalToolIndex t
         if (!nozzle_cleaner::load_and_execute(nozzle_cleaner::Sequence::eject_blob)) {
             return std::unexpected(tool_offset::FailureReason::cleaning_failed);
         }
+
+    #if HAS_PRESSURE_ADVANCE_CALIBRATION()
+        // The nozzle is at the purge position and about to be heated up and purged anyway
+        pressure_advance_calibration::run_requested(tool);
+    #endif
 
         // Purge and clean at cleaning temperature
         set_temp_and_wait_reached(tool, temps.cleaning);

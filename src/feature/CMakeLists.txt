@@ -37,6 +37,10 @@ if(HAS_INDX)
   add_subdirectory(indx_head_leds)
 endif()
 
+if(HAS_PRESSURE_ADVANCE_CALIBRATION)
+  add_subdirectory(pressure_advance_calibration)
+endif()
+
 if(HAS_CANCEL_OBJECT)
   add_subdirectory(cancel_object)
 endif()

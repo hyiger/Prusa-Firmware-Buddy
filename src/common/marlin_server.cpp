@@ -80,6 +80,11 @@
     #include <feature/cancel_object/cancel_object.hpp>
 #endif
 
+#include <option/has_pressure_advance_calibration.h>
+#if HAS_PRESSURE_ADVANCE_CALIBRATION()
+    #include <feature/pressure_advance_calibration/pressure_advance_calibration.hpp>
+#endif
+
 #include <option/has_power_panic.h>
 #include <option/has_spool_join.h>
 #if HAS_SPOOL_JOIN()
@@ -2380,6 +2385,11 @@ static void _server_print_loop(void) {
         for (auto &cancel_object_name : marlin_vars().cancel_object_names) {
             cancel_object_name.set(""); // Erase object names
         }
+#endif
+
+#if HAS_PRESSURE_ADVANCE_CALIBRATION()
+        // What has been calibrated for the previous print might not suit the filament of this one
+        pressure_advance_calibration::reset();
 #endif
 
 #if HAS_LOADCELL()

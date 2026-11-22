@@ -74,6 +74,7 @@
 #include <option/has_side_fsensor.h>
 #include <option/has_side_fsensor_invertible.h>
 #include <option/has_nozzle_cleaner_lite.h>
+#include <option/has_pressure_advance_calibration.h>
 #include <option/has_extra_experimental_settings.h>
 #include <common/extended_printer_type.hpp>
 #include <guiconfig/guiconfig.h>
@@ -827,6 +828,11 @@ struct CurrentStore
     StoreItem<int16_t, defaults::homing_sens_y, ItemFlag::calibrations | ItemFlag::common_misconfigurations, journal::hash("Homing Sens Y")> homing_sens_y; // Y axis homing sensitivity
 
     StoreItem<bool, !HAS_INDX(), ItemFlag::features, journal::hash("Stuck filament detection V2")> stuck_filament_detection;
+
+#if HAS_PRESSURE_ADVANCE_CALIBRATION()
+    /// Whether the pressure advance gets calibrated when a print asks for it, and the result used
+    StoreItem<bool, false, ItemFlag::features, journal::hash("Pressure Advance Calibration")> pressure_advance_calibration;
+#endif
 
     StoreItem<bool, false, ItemFlag::features, journal::hash("Stealth mode")> stealth_mode;
 

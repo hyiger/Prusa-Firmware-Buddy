@@ -864,6 +864,10 @@ set_feature_for_printers(HAS_GANTRY_SQUARENESS_CHECK "COREONE_INDX")
 # libraries. Only on the printer it is tested on.
 set_feature_for_printers(HAS_FILAMENT_SLOTS "COREONE_INDX")
 
+# Pressure advance measured with the load cell while a tool extrudes into the wastebin (M573, M574).
+# Needs the load cell and the nozzle cleaner. Not on COREONEL_INDX yet - untested there.
+set_feature_for_printers_master_board(HAS_PRESSURE_ADVANCE_CALIBRATION "COREONE_INDX")
+
 if(HAS_TOOLCHANGER OR HAS_MMU2)
   define_boolean_option(HAS_TOOL_MAPPING yes)
   define_boolean_option(HAS_SPOOL_JOIN yes)
