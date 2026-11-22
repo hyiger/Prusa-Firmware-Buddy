@@ -289,6 +289,11 @@ public:
 
     explicit PressureAdvanceSearch(const Config &config);
 
+    /// @returns number of step responses the search measures
+    uint8_t step_count() const {
+        return config_.steps;
+    }
+
     /// @returns pressure advance [s] to measure the step response with next, nullopt if there is enough of them
     std::optional<float> next() const;
 

@@ -28,6 +28,10 @@
 #include "../Marlin/src/feature/precise_stepping/precise_stepping.hpp"
 #include "feature/prusa/e-stall_detector.h"
 #include <metric_handlers.h>
+#include <option/has_pressure_advance_calibration.h>
+#if HAS_PRESSURE_ADVANCE_CALIBRATION()
+    #include <feature/pressure_advance_calibration/pressure_advance_calibration.hpp>
+#endif
 
 LOG_COMPONENT_DEF(Loadcell, logging::Severity::info);
 
@@ -386,6 +390,12 @@ void Loadcell::ProcessSample(int32_t loadcellRaw, uint32_t time_us, uint32_t sou
 
     // Perform E motor stall detection
     EMotorStallDetector::Instance().ProcessSample(this->loadcellRaw, time_us);
+
+#if HAS_PRESSURE_ADVANCE_CALIBRATION()
+    if (loadcellRaw != undefined_value) {
+        pressure_advance_calibration::process_sample(time_us, tared_z_load, pos_sample.e);
+    }
+#endif
 }
 
 bool Loadcell::probe_should_abort() const {

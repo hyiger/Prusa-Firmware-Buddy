@@ -61,6 +61,9 @@ static constexpr EnumArray<Message::Type, const char *, Message::Type::_cnt> mes
 #if HAS_NOZZLE_CLEANER_LITE()
         { Message::Type::nozzle_cleaner_lite, N_("Nozzle cleaning") },
 #endif
+#if HAS_PRESSURE_ADVANCE_CALIBRATION()
+        { Message::Type::pressure_advance_calibrating, N_("Calibrating pressure advance") },
+#endif
 };
 
 void PrintStatusMessageFormatterBuddy::format(StringBuilder &target, const Message &msg) {
@@ -163,6 +166,14 @@ void PrintStatusMessageFormatterBuddy::format(StringBuilder &target, const Messa
 
 #if HAS_TOOL_OFFSET_SENSOR()
     case Message::Type::tool_offset_calibrating: {
+        const auto d = std::get<PrintStatusMessageDataToolProgress>(msg.data);
+        target.append_printf("\nT%i (%i/%i)", (int)(d.tool + 1), (int)d.progress.current, (int)d.progress.target);
+        break;
+    }
+#endif
+
+#if HAS_PRESSURE_ADVANCE_CALIBRATION()
+    case Message::Type::pressure_advance_calibrating: {
         const auto d = std::get<PrintStatusMessageDataToolProgress>(msg.data);
         target.append_printf("\nT%i (%i/%i)", (int)(d.tool + 1), (int)d.progress.current, (int)d.progress.target);
         break;
