@@ -195,6 +195,7 @@ jobs:
           - **Filament slots**: each tool records the vendor and color of its filament, picked while loading the way an AMS does it. PrusaSlicer Filament Edition reads them over PrusaLink.
           - **Prusa Connect**: the printer reports the plain version to Connect, so uploads work.
           - **Nozzle temperature**: INDX tools take targets up to 300 °C, where stock ${BASE_VERSION} stops at 290 °C. Not yet verified on hardware.
+          - **Automatic pressure advance**: the printer can measure the pressure advance of each tool with the load cell at the start of a print and use it in place of the one from the filament profile. Off by default. Not yet verified on hardware.
 
           The printer shows its version as `${VERSION}`, so it can be told apart from Prusa's build. Prusa Connect is the exception, see below.
 
@@ -223,6 +224,16 @@ jobs:
           Stock ${BASE_VERSION} caps an INDX tool's target at 290 °C, below the 300 °C the INDX head itself accepts. This build raises the printer's limit to match the head, so the menus, filament presets and `M104`/`M109` can set up to 300 °C. A higher target is still lowered to 300 °C without a message. The printer stops with a MAXTEMP error if a nozzle reads above 315 °C instead of 305 °C, and the INDX head still shuts its heater off on its own above 330 °C.
 
           This has not been tested on a printer. Nobody has yet confirmed that a nozzle settles at 300 °C without overshooting into the MAXTEMP error, or checked the head's infrared temperature reading against a thermometer that high. Check this on your own printer before printing at 300 °C.
+
+          ### Automatic pressure advance
+
+          PrusaSlicer's Core One INDX profiles send two commands that stock ${BASE_VERSION} ignores: an `M574` for each tool before the tool offset calibration, and `M573 R` after the `M572` of each filament. This build acts on them once Settings > Auto Pressure Advance is turned on. It is off by default, and the commands are ignored as before while it is off.
+
+          With it on, the tool offset calibration at the start of a print measures every tool the print uses while it has the tool in the nozzle cleaner. The tool heats up to the temperature of its filament and extrudes for about 20 seconds, alternating between a slow and a fast flow, while the load cell reads the force on the nozzle. The printer looks for the pressure advance with which that force changes exactly when the flow does, and the print uses it for that tool in place of the one from the filament profile. The screen shows "Calibrating pressure advance" meanwhile. This takes 15 to 30 mm of filament per tool. A tool whose measurement fails prints with the pressure advance from the profile, and so does a tool with flexible filament, which the slicer does not ask to be measured. The measured values are forgotten when the next print starts.
+
+          `M573` without parameters prints the measured values, and `M573 S1` and `M573 S0` turn the setting on and off. `M574 T<temperature> F<mm/s> I` measures the picked tool right away and prints the result. That works with the setting off too, so the measurement can be tried without it changing any print. X and Y have to be homed first, and the tool ends up purged and cleaned in the nozzle cleaner. Each step of a measurement is logged and sent as the `pa_calib_step` metric, and the result as `pa_calib`.
+
+          This has not been tested on a printer. The measurement was developed against a simulated nozzle, so nobody has yet seen whether the load cell signal of a real one is clean enough for it, or whether the values it comes up with print better than the ones from the filament profiles. Try it with `M574 ... I` and compare the result with the pressure advance of the profile before turning the setting on.
 
           ### Flashing
 
