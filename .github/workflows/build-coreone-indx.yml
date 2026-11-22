@@ -129,12 +129,15 @@ jobs:
         # printer's own update path, so it is not built or published.
         # The suffixes start with '-', so they are joined to their options
         # with '=' to keep them from being parsed as options themselves.
+        # Warnings are errors, as in Prusa's own CI, so that a change which
+        # would fail there fails here too.
         env:
           SUFFIX: ${{ steps.version.outputs.suffix }}
           SUFFIX_SHORT: ${{ steps.version.outputs.suffix_short }}
         run: >-
           python3 utils/build.py --preset coreone_indx --build-type release --bootloader yes
           "--version-suffix=${SUFFIX}" "--version-suffix-short=${SUFFIX_SHORT}"
+          -DCUSTOM_COMPILE_OPTIONS:STRING=-Werror
 
       - name: Collect artifacts
         env:
