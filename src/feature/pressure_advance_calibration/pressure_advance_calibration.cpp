@@ -74,6 +74,9 @@ namespace {
     /// [mm/s^2] The pattern is not planned for the extruder accelerating any slower than this
     constexpr float min_e_acceleration = 20.0f;
 
+    /// How long the outcome stays on the screen before whatever comes next replaces it
+    constexpr int32_t outcome_display_time_ms = 2000;
+
     std::array<std::optional<Request>, PhysicalToolIndex::count> requests;
     std::array<std::optional<float>, PhysicalToolIndex::count> results;
 
@@ -251,7 +254,7 @@ namespace {
     }
 
     /// Calibrates the pressure advance of the picked tool with its nozzle at the purge position
-    std::expected<float, Failure> calibrate(PhysicalToolIndex tool, const Request &request) {
+    std::expected<float, Failure> calibrate(PhysicalToolIndex tool, const Request &request, PrintStatusMessageGuard &status) {
         if (PhysicalToolIndex::currently_selected_opt() != tool) {
             return std::unexpected(Failure::not_ready);
         }
@@ -263,7 +266,6 @@ namespace {
             .steps = request.steps,
         });
 
-        PrintStatusMessageGuard status;
         uint8_t step = 0;
         const auto report_progress = [&] {
             status.update<PrintStatusMessage::Type::pressure_advance_calibrating>({
@@ -332,11 +334,26 @@ namespace {
     }
 
     std::expected<float, Failure> calibrate_and_store(PhysicalToolIndex tool, const Request &request) {
-        const auto result = calibrate(tool, request);
+        PrintStatusMessageGuard status;
+
+        const auto result = calibrate(tool, request, status);
         results[tool.to_raw()] = result ? std::optional(*result) : std::nullopt;
+
         if (result) {
             log_info(PressureAdvanceCalib, "T%u: pressure advance %.4f", tool.to_raw(), static_cast<double>(*result));
             metric_record_custom(&metric_result, ",tool=%u k=%.4f", tool.to_raw(), static_cast<double>(*result));
+            status.update<PrintStatusMessage::Type::pressure_advance_calibrated>({ .progress = { .current = *result }, .tool = tool.to_raw() });
+
+        } else if (result.error() == Failure::aborted) {
+            return result;
+
+        } else {
+            status.update<PrintStatusMessage::Type::pressure_advance_calibration_failed>({ .progress = {}, .tool = tool.to_raw() });
+        }
+
+        const uint32_t shown_ms = ticks_ms();
+        while (ticks_diff(ticks_ms(), shown_ms) < outcome_display_time_ms && !planner.draining()) {
+            idle(true);
         }
         return result;
     }

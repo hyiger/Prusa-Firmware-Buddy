@@ -69,6 +69,8 @@ struct PrintStatusMessage {
 #endif
 #if HAS_PRESSURE_ADVANCE_CALIBRATION()
         pressure_advance_calibrating,
+        pressure_advance_calibrated,
+        pressure_advance_calibration_failed,
 #endif
         _cnt
     };
@@ -150,6 +152,8 @@ struct PrintStatusMessage {
 #endif
 #if HAS_PRESSURE_ADVANCE_CALIBRATION()
         TypeRecord<Type::pressure_advance_calibrating, PrintStatusMessageDataToolProgress>,
+        TypeRecord<Type::pressure_advance_calibrated, PrintStatusMessageDataToolProgress>,
+        TypeRecord<Type::pressure_advance_calibration_failed, PrintStatusMessageDataToolProgress>,
 #endif
 
         TypeRecord<Type::none, std::monostate>>;
