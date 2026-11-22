@@ -4,6 +4,11 @@
 /// The tool extrudes into the wastebin while the load cell tells how the nozzle pressure follows
 /// the extruder. See pressure_advance_estimator.hpp for how the pressure advance comes out of that.
 ///
+/// Nothing may touch the nozzle meanwhile, which the silicone V-groove of the nozzle cleaner does at
+/// the purge position. So the measurement is done further along the lane the cleaner sequences move
+/// the nozzle in. The head never leaves that lane, so that the sequences and whatever takes the head
+/// out of the cleaner afterwards find it where they expect it.
+///
 /// Except for process_sample(), everything is to be called from the marlin task only.
 #pragma once
 
@@ -31,6 +36,14 @@ struct Request {
 
     /// How many pressure advance values are tried
     uint8_t steps = 4;
+
+    /// Where on the lane of the nozzle cleaner to measure, as the Y of a G750 move.
+    /// A spot known to be clear of the silicone if not given.
+    std::optional<float> cleaner_y = std::nullopt;
+
+    /// The part of the lane the eject strokes of the nozzle cleaner go through, so the nozzle can go anywhere in it
+    static constexpr float min_cleaner_y = 76;
+    static constexpr float max_cleaner_y = 93;
 };
 
 enum class Failure : uint8_t {
@@ -55,7 +68,7 @@ void request(PhysicalToolIndex tool, const Request &request);
 
 /// Calibrates the pressure advance of the tool, if it has been requested.
 /// The tool has to be picked, with its nozzle at the purge position of the nozzle cleaner.
-/// Leaves the nozzle hot, with a blob on it.
+/// Leaves the nozzle there again, hot and with a blob on it.
 void run_requested(PhysicalToolIndex tool);
 
 /// Calibrates the pressure advance of the picked tool right away.

@@ -7,9 +7,11 @@
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <cstdio>
 #include <utility>
 
 #include <Marlin/src/Marlin.h>
+#include <Marlin/src/gcode/gcode.h>
 #include <Marlin/src/module/motion.h>
 #include <Marlin/src/module/planner.h>
 #include <Marlin/src/module/temperature.h>
@@ -61,9 +63,17 @@ namespace {
     constexpr uint8_t min_cycles = 2;
     constexpr uint8_t max_cycles = 8;
 
-    /// [mm] The pressure advance only applies while the head moves, so the head goes back and forth by this much.
-    /// Short enough to stay above the spot where the nozzle cleaner expects the blob.
+    /// [mm] The pressure advance only applies while the head moves, so the head goes back and forth by this much
     constexpr float wiggle = 0.4f;
+
+    /// Where on the lane of the nozzle cleaner the measurement is done, as the Y of a G750 move.
+    /// The calibration of the cleaner touches its wall with the load cell from this spot of the lane,
+    /// so the nozzle hangs free there.
+    constexpr float default_cleaner_y = X_NOZZLE_CLEANER_WALL_TOUCH_Y - Y_NOZZLE_CLEANER_ORIGIN;
+    static_assert(default_cleaner_y >= Request::min_cleaner_y + wiggle / 2 && default_cleaner_y <= Request::max_cleaner_y - wiggle / 2);
+
+    /// [mm/s] To the measurement spot and back
+    constexpr int lane_feedrate = 50;
 
     /// [mm of filament] Pushed through before the measurement, to get rid of what has oozed out
     constexpr float prime_length = 5.0f;
@@ -166,6 +176,13 @@ namespace {
             return "out of range";
         }
         return "";
+    }
+
+    /// Moves the nozzle along the lane of the nozzle cleaner, to a Y in the coordinates of its sequences
+    void move_along_cleaner_lane(float y) {
+        std::array<char, 32> gcode;
+        snprintf(gcode.data(), gcode.size(), "G750 Y%.2f F%i", static_cast<double>(y), lane_feedrate);
+        GcodeSuite::process_subcommands_now(gcode.data());
     }
 
     /// Extrudes the pattern with the given pressure advance and evaluates how the force responds.
@@ -275,6 +292,7 @@ namespace {
 
         const float fast_feedrate = std::clamp(request.feedrate, min_feedrate, max_feedrate);
         const float slow_feedrate = std::clamp(request.slow_feedrate.value_or(fast_feedrate * default_slow_feedrate_ratio), min_slow_feedrate, fast_feedrate * max_slow_feedrate_ratio);
+        const float cleaner_y = std::clamp(request.cleaner_y.value_or(default_cleaner_y), Request::min_cleaner_y + wiggle / 2, Request::max_cleaner_y - wiggle / 2);
         PressureAdvanceSearch search({
             .max_pressure_advance = max_pressure_advance,
             .steps = request.steps,
@@ -308,15 +326,28 @@ namespace {
             pressure_advance::set_axis_e_config(original_config);
         };
 
+        // Out of the silicone V-groove the purge position is in, and back there afterwards
+        const MachinePosXYZE start = current_machine_position();
+        ScopeGuard return_to_start = [&] {
+            // The moves of a stopped print get thrown away. Planning one would only have the
+            // firmware believe the head is where it is not.
+            if (planner.draining()) {
+                return;
+            }
+            MachinePosXYZE position = current_machine_position();
+            position.y = start.y;
+            line_to_machine_pos(position, static_cast<float>(lane_feedrate));
+            planner.synchronize();
+        };
+        move_along_cleaner_lane(cleaner_y);
+        if (planner.draining()) {
+            return std::unexpected(Failure::aborted);
+        }
+
         // The first extrusion also takes back the retraction the tool has been parked with
         mapi::extruder_move(prime_length, fast_feedrate);
 
         const MachinePosXYZE origin = current_machine_position();
-        ScopeGuard return_to_origin = [&] {
-            MachinePosXYZE position = current_machine_position();
-            position.y = origin.y;
-            line_to_machine_pos(position, NOZZLE_PARK_XY_FEEDRATE);
-        };
 
         const PatternParams pattern_params {
             .slow_feedrate = slow_feedrate,
@@ -326,9 +357,9 @@ namespace {
             .cycles = std::clamp(request.cycles, min_cycles, max_cycles),
         };
         const Pattern pattern = plan_pattern(pattern_params);
-        log_info(PressureAdvanceCalib, "T%u: %i C, %.2f/%.2f mm/s, %u cycles, %.1f mm of filament per step",
+        log_info(PressureAdvanceCalib, "T%u: %i C, %.2f/%.2f mm/s, %u cycles, %.1f mm of filament per step, at Y%.1f of the cleaner",
             tool.to_raw(), request.nozzle_temperature, static_cast<double>(slow_feedrate), static_cast<double>(fast_feedrate),
-            pattern.cycles, static_cast<double>(pattern.total_length()));
+            pattern.cycles, static_cast<double>(pattern.total_length()), static_cast<double>(cleaner_y));
 
         while (const auto pressure_advance = search.next()) {
             metric_record_custom(&metric_pattern, " k=%.4f,s=%.3f,f=%.3f,a=%.0f,w=%.3f,c=%ui",
