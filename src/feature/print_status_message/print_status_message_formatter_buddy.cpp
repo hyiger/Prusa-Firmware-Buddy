@@ -63,6 +63,8 @@ static constexpr EnumArray<Message::Type, const char *, Message::Type::_cnt> mes
 #endif
 #if HAS_PRESSURE_ADVANCE_CALIBRATION()
         { Message::Type::pressure_advance_calibrating, N_("Calibrating pressure advance") },
+        { Message::Type::pressure_advance_calibrated, N_("Pressure advance calibrated") },
+        { Message::Type::pressure_advance_calibration_failed, N_("Pressure advance calibration failed") },
 #endif
 };
 
@@ -176,6 +178,19 @@ void PrintStatusMessageFormatterBuddy::format(StringBuilder &target, const Messa
     case Message::Type::pressure_advance_calibrating: {
         const auto d = std::get<PrintStatusMessageDataToolProgress>(msg.data);
         target.append_printf("\nT%i (%i/%i)", (int)(d.tool + 1), (int)d.progress.current, (int)d.progress.target);
+        break;
+    }
+
+    case Message::Type::pressure_advance_calibrated: {
+        // The progress holds the calibrated pressure advance
+        const auto d = std::get<PrintStatusMessageDataToolProgress>(msg.data);
+        target.append_printf("\nT%i: %.3f", (int)(d.tool + 1), static_cast<double>(d.progress.current));
+        break;
+    }
+
+    case Message::Type::pressure_advance_calibration_failed: {
+        const auto d = std::get<PrintStatusMessageDataToolProgress>(msg.data);
+        target.append_printf("\nT%i", (int)(d.tool + 1));
         break;
     }
 #endif
