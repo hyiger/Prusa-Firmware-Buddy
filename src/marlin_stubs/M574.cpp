@@ -21,11 +21,14 @@
  * between a slow and a fast extrusion there and the firmware looks for the pressure advance with
  * which the force on the nozzle changes exactly when the flow does. `M573 R` then puts the result to use.
  *
+ * Nothing may touch the nozzle during the measurement, so it is not done at the purge position, which
+ * is inside the silicone V-groove, but further along the lane of the nozzle cleaner.
+ *
  * Does nothing unless the calibration is turned on, see M573.
  *
  *#### Usage
  *
- *    M574 [ S | T | F | V | L | C | N | I ]
+ *    M574 [ S | T | F | V | L | C | N | Y | I ]
  *
  *#### Parameters
  *
@@ -37,6 +40,8 @@
  * - `L` - Filament feedrate of the slow extrusion [mm/s] (defaults to a quarter of `F`)
  * - `C` - How many times the extrusion goes fast with each pressure advance tried (2-8, defaults to 4)
  * - `N` - How many pressure advance values are tried (3-8, defaults to 4)
+ * - `Y` - Where on the lane of the nozzle cleaner to measure, as the Y of a G750 move (76-93, defaults to 77).
+ *         The purge position is at 87.
  * - `I` - Calibrate the picked tool right away instead of leaving it to G427, and report the result.
  *         Works with the calibration turned off, too. X and Y have to be homed.
  *
@@ -75,13 +80,16 @@ void PrusaGcodeSuite::M574() {
         return;
     }
 
-    pressure_advance_calibration::Request request {
+    using Request = pressure_advance_calibration::Request;
+    Request request {
         .nozzle_temperature = *temperature,
         .feedrate = *feedrate,
     };
 
     const auto slow_feedrate = p.option_expected<float>('L', 0.0f);
+    const auto cleaner_y = p.option_expected<float>('Y', Request::min_cleaner_y, Request::max_cleaner_y);
     if (invalid(slow_feedrate)
+        || invalid(cleaner_y)
         || invalid(p.store_option_if_present('C', request.cycles))
         || invalid(p.store_option_if_present('N', request.steps))
         || invalid(p.option_expected<uint8_t>('S'))) {
@@ -89,6 +97,9 @@ void PrusaGcodeSuite::M574() {
     }
     if (slow_feedrate) {
         request.slow_feedrate = *slow_feedrate;
+    }
+    if (cleaner_y) {
+        request.cleaner_y = *cleaner_y;
     }
 
     const auto tool = stdext::get_optional<PhysicalToolIndex>(GcodeSuite::get_target_physical_from_optional(p.option<uint8_t>('S'), true));
