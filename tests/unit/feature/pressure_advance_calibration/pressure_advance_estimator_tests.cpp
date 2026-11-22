@@ -41,6 +41,9 @@ struct Simulation {
     /// The extruder goes this many times faster than the pattern says
     double feedrate_factor = 1;
 
+    /// How much of the slower of the two feedrates the extruder keeps at the junction of two legs
+    double junction_feedrate_factor = 1;
+
     uint8_t cycles = 4;
     double slow_feedrate = 0.5;
     double fast_feedrate = 2.0;
@@ -70,7 +73,7 @@ struct Simulation {
     static constexpr double rest_time = 0.3;
 
     /// Commanded extruder feedrate over time, the way the planner executes the pattern:
-    /// the junctions are taken at the slower of the two feedrates, the rest is accelerated within the faster leg.
+    /// the junctions are taken at the slower of the two feedrates at most, the rest is accelerated within the legs.
     std::vector<double> commanded_feedrate() const {
         const Pattern pattern = this->pattern();
         std::vector<double> result;
@@ -81,8 +84,8 @@ struct Simulation {
         rest();
         for (uint8_t leg = 0; leg < pattern.leg_count(); leg++) {
             const double cruise = pattern.leg_feedrate(leg) * feedrate_factor;
-            const double entry = leg == 0 ? 0 : std::min(cruise, pattern.leg_feedrate(leg - 1) * feedrate_factor);
-            const double exit = leg + 1 == pattern.leg_count() ? 0 : std::min(cruise, pattern.leg_feedrate(leg + 1) * feedrate_factor);
+            const double entry = leg == 0 ? 0 : junction_feedrate_factor * std::min(cruise, pattern.leg_feedrate(leg - 1) * feedrate_factor);
+            const double exit = leg + 1 == pattern.leg_count() ? 0 : junction_feedrate_factor * std::min(cruise, pattern.leg_feedrate(leg + 1) * feedrate_factor);
             const double length = pattern.leg_length(leg);
             const double braking_distance = (cruise * cruise - exit * exit) / (2 * e_acceleration);
 
@@ -372,6 +375,20 @@ TEST_CASE("pressure_advance_calibration::PressureAdvanceSearch", "[pressure_adva
     const auto result = simulation.calibrate();
     REQUIRE(result.has_value());
     CHECK_THAT(*result, WithinAbs(simulation.time_constant, 0.002 + 0.03 * simulation.time_constant));
+}
+
+TEST_CASE("pressure_advance_calibration::PressureAdvanceSearch junction feedrate", "[pressure_advance_calibration]") {
+    // However much the planner slows down between the legs, down to stopping there
+    Simulation simulation;
+    simulation.junction_feedrate_factor = GENERATE(0.0, 0.5, 1.0);
+    simulation.e_acceleration = GENERATE(40.0, 120.0, 1000.0);
+    simulation.fast_feedrate = GENERATE(2.0, 6.0);
+    simulation.slow_feedrate = simulation.fast_feedrate / 4;
+    CAPTURE(simulation.junction_feedrate_factor, simulation.e_acceleration, simulation.fast_feedrate);
+
+    const auto result = simulation.calibrate();
+    REQUIRE(result.has_value());
+    CHECK_THAT(*result, WithinAbs(simulation.time_constant, 0.003));
 }
 
 TEST_CASE("pressure_advance_calibration::PressureAdvanceSearch nozzle without delay", "[pressure_advance_calibration]") {
