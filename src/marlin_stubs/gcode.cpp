@@ -168,6 +168,14 @@ bool GcodeSuite::process_parsed_command_custom(bool no_ok) {
         case 340:
             PrusaGcodeSuite::M340();
             break;
+#if HAS_PRESSURE_ADVANCE_CALIBRATION()
+        case 573:
+            PrusaGcodeSuite::M573();
+            break;
+        case 574:
+            PrusaGcodeSuite::M574();
+            break;
+#endif
         case 591:
             PrusaGcodeSuite::M591();
             break;
