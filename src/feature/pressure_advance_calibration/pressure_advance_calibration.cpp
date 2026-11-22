@@ -38,6 +38,12 @@ METRIC_DEF(metric_step_response, "pa_calib_step", METRIC_VALUE_CUSTOM, 0, METRIC
 // Calibrated pressure advance of a tool
 METRIC_DEF(metric_result, "pa_calib", METRIC_VALUE_CUSTOM, 0, METRIC_ENABLED);
 
+// The two below are enough to evaluate a measurement again outside of the printer.
+// What the pattern of the step that follows is planned from, and the pressure advance it is extruded with
+METRIC_DEF(metric_pattern, "pa_calib_pattern", METRIC_VALUE_CUSTOM, 0, METRIC_DISABLED);
+// Each sample the step response is evaluated from, with the extruder position relative to the start of the pattern
+METRIC_DEF(metric_sample, "pa_calib_sample", METRIC_VALUE_CUSTOM, 0, METRIC_DISABLED);
+
 namespace pressure_advance_calibration {
 
 namespace {
@@ -171,16 +177,24 @@ namespace {
         }
         pressure_advance::set_axis_e_config({ .pressure_advance = pressure_advance, .smooth_time = smooth_time });
 
+        const float e_start = planner.get_axis_position_mm(E_AXIS);
         StepResponseAnalyzer analyzer({
             .pattern = pattern,
-            .e_start = planner.get_axis_position_mm(E_AXIS),
+            .e_start = e_start,
             .pressure_advance = pressure_advance,
             .min_force_step = min_force_step,
         });
+        const auto analyze_sample = [&](const Sample &sample) {
+            analyzer.process(sample);
+            if (std::isfinite(sample.e_position) && metric_record_is_due(&metric_sample)) {
+                metric_record_custom_at_time(&metric_sample, sample.time_us, " f=%.1f,e=%.4f",
+                    static_cast<double>(sample.force), static_cast<double>(sample.e_position - e_start));
+            }
+        };
         const auto analyze_samples = [&] {
             Sample sample;
             while (sample_queue.pop(sample)) {
-                analyzer.process(sample);
+                analyze_sample(sample);
             }
         };
 
@@ -204,7 +218,7 @@ namespace {
                 }
                 idle(true);
             }
-            analyzer.process(sample);
+            analyze_sample(sample);
         }
 
         MachinePosXYZE target = current_machine_position();
@@ -247,7 +261,7 @@ namespace {
         log_info(PressureAdvanceCalib, "K=%.4f: lag %.4f s (+-%.4f), force step %.1f g, %u transitions",
             static_cast<double>(pressure_advance), static_cast<double>(response->lag), static_cast<double>(response->lag_deviation),
             static_cast<double>(response->force_step), response->transitions);
-        metric_record_custom(&metric_step_response, " k=%.4f,lag=%.4f,dev=%.4f,force=%.1f,n=%ui",
+        metric_record_custom(&metric_step_response, " k=%.4f,lag=%.4f,dev=%.3f,f=%.0f,n=%ui",
             static_cast<double>(pressure_advance), static_cast<double>(response->lag), static_cast<double>(response->lag_deviation),
             static_cast<double>(response->force_step), response->transitions);
         return *response;
@@ -304,18 +318,23 @@ namespace {
             line_to_machine_pos(position, NOZZLE_PARK_XY_FEEDRATE);
         };
 
-        const Pattern pattern = plan_pattern({
+        const PatternParams pattern_params {
             .slow_feedrate = slow_feedrate,
             .fast_feedrate = fast_feedrate,
             .acceleration = e_acceleration(slow_feedrate),
             .smooth_time = original_config.smooth_time,
             .cycles = std::clamp(request.cycles, min_cycles, max_cycles),
-        });
+        };
+        const Pattern pattern = plan_pattern(pattern_params);
         log_info(PressureAdvanceCalib, "T%u: %i C, %.2f/%.2f mm/s, %u cycles, %.1f mm of filament per step",
             tool.to_raw(), request.nozzle_temperature, static_cast<double>(slow_feedrate), static_cast<double>(fast_feedrate),
             pattern.cycles, static_cast<double>(pattern.total_length()));
 
         while (const auto pressure_advance = search.next()) {
+            metric_record_custom(&metric_pattern, " k=%.4f,s=%.3f,f=%.3f,a=%.0f,w=%.3f,c=%ui",
+                static_cast<double>(*pressure_advance), static_cast<double>(pattern_params.slow_feedrate), static_cast<double>(pattern_params.fast_feedrate),
+                static_cast<double>(pattern_params.acceleration), static_cast<double>(pattern_params.smooth_time), pattern_params.cycles);
+
             const auto response = measure_step_response(pattern, *pressure_advance, original_config.smooth_time, origin.y);
             if (!response) {
                 return std::unexpected(response.error());
