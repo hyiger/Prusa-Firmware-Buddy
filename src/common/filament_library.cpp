@@ -267,7 +267,7 @@ namespace {
 
 struct PickedForLoad {
     uint8_t tool = 0xff;
-    EncodedFilamentType type;
+    EncodedFilamentType type = {};
     FilamentSpool spool;
 };
 static_assert(sizeof(PickedForLoad) == 4);
