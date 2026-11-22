@@ -38,6 +38,11 @@
     #include <screen/openprinttag/screen_opt_settings.hpp>
 #endif
 
+#include <option/has_pressure_advance_calibration.h>
+#if HAS_PRESSURE_ADVANCE_CALIBRATION()
+    #include <gui/menu_item/specific/menu_items_pressure_advance_calibration.hpp>
+#endif
+
 using ScreenMenuSettingsBase = BasicScreenMenu<
     MI_USER_INTERFACE,
     MI_TOOLHEAD_SETTINGS,
@@ -55,6 +60,9 @@ using ScreenMenuSettingsBase = BasicScreenMenu<
 #endif
 #if HAS_SWITCHABLE_AUTO_RETRACT()
     MI_AUTO_RETRACT_ENABLE,
+#endif
+#if HAS_PRESSURE_ADVANCE_CALIBRATION()
+    MI_PRESSURE_ADVANCE_CALIBRATION,
 #endif
 #if HAS_ANFC()
     buddy::openprinttag::MI_OPT_SETTINGS,
