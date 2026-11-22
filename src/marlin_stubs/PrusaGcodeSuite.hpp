@@ -25,6 +25,7 @@
 #include <option/has_indx.h>
 #include <option/has_wastebin_fill_tracking.h>
 #include <option/has_tool_offset_sensor.h>
+#include <option/has_pressure_advance_calibration.h>
 
 #include <gcode/gcode_parser.hpp>
 
@@ -144,6 +145,11 @@ void M866(); //< Filament slot vendor and color
 
 #if HAS_CHAMBER_VENTS()
 void M870(); ///< Open or close ventilation intake
+#endif
+
+#if HAS_PRESSURE_ADVANCE_CALIBRATION()
+void M573(); ///< Use or report calibrated pressure advance
+void M574(); ///< Calibrate pressure advance
 #endif
 
 void M591(); //< configure Filament stuck monitoring

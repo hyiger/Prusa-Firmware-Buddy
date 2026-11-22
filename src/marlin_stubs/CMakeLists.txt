@@ -145,6 +145,10 @@ if(HAS_NOZZLE_CLEANER)
   target_sources(firmware PRIVATE G750.cpp)
 endif()
 
+if(HAS_PRESSURE_ADVANCE_CALIBRATION)
+  target_sources(firmware PRIVATE M573.cpp M574.cpp)
+endif()
+
 if(HAS_TOOLCHANGER OR HAS_MMU2)
   target_sources(firmware PRIVATE M9934.cpp)
 endif()
