@@ -28,7 +28,7 @@
  *
  *#### Usage
  *
- *    M574 [ S | T | F | V | L | C | N | Y | I ]
+ *    M574 [ S | T | F | V | L | C | N | Y | D | P | Q | I ]
  *
  *#### Parameters
  *
@@ -42,6 +42,11 @@
  * - `N` - How many pressure advance values are tried (3-8, defaults to 4)
  * - `Y` - Where on the lane of the nozzle cleaner to measure, as the Y of a G750 move (76-93, defaults to 77).
  *         The purge position is at 87.
+ * - `D` - Log how the force follows the flow with each pressure advance tried: its course around the
+ *         flow changes, in thousandths of the way from the force before one to the settled force after it,
+ *         a point every 10 ms.
+ * - `P`, `Q` - Lowest and highest pressure advance [s] to try `N` evenly spread values of, instead of closing
+ *         in on the result. For looking into how the force responds to the others, along with `D`.
  * - `I` - Calibrate the picked tool right away instead of leaving it to G427, and report the result.
  *         Works with the calibration turned off, too. X and Y have to be homed.
  *
@@ -49,6 +54,7 @@
  *
  *    M574 S0 V35 T215 F1.6 ; calibrate tool 0 at 215 °C for 1.6 mm/s of filament once G427 gets to it
  *    M574 T215 F1.6 I      ; calibrate the picked tool right now
+ *    M574 T215 F1.6 N8 P0.02 Q0.09 D I ; log the force response with 0.02, 0.03 ... 0.09 s of pressure advance
  */
 void PrusaGcodeSuite::M574() {
     GCodeParser2 p;
@@ -90,6 +96,7 @@ void PrusaGcodeSuite::M574() {
     const auto cleaner_y = p.option_expected<float>('Y', Request::min_cleaner_y, Request::max_cleaner_y);
     if (invalid(slow_feedrate)
         || invalid(cleaner_y)
+        || invalid(p.store_option_if_present('D', request.log_response_curves))
         || invalid(p.store_option_if_present('C', request.cycles))
         || invalid(p.store_option_if_present('N', request.steps))
         || invalid(p.option_expected<uint8_t>('S'))) {
@@ -100,6 +107,19 @@ void PrusaGcodeSuite::M574() {
     }
     if (cleaner_y) {
         request.cleaner_y = *cleaner_y;
+    }
+
+    const auto scan_first = p.option_expected<float>('P', 0.0f, Request::max_pressure_advance);
+    const auto scan_last = p.option_expected<float>('Q', 0.0f, Request::max_pressure_advance);
+    if (invalid(scan_first) || invalid(scan_last)) {
+        return;
+    }
+    if (scan_first.has_value() != scan_last.has_value()) {
+        SERIAL_ERROR_MSG("M574: P and Q go together");
+        return;
+    }
+    if (scan_first) {
+        request.scan = { .first = *scan_first, .last = *scan_last };
     }
 
     const auto tool = stdext::get_optional<PhysicalToolIndex>(GcodeSuite::get_target_physical_from_optional(p.option<uint8_t>('S'), true));

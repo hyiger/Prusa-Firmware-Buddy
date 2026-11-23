@@ -28,6 +28,7 @@
 #include <timing.h>
 #include <tool/hotend/hotend.hpp>
 #include <utils/atomic_circular_queue.hpp>
+#include <utils/string_builder.hpp>
 
 #include <option/has_pressure_advance_calibration.h>
 
@@ -81,9 +82,6 @@ namespace {
     /// [g] The force has to change at least this much between the two feedrates
     constexpr float min_force_step = 10.0f;
 
-    /// [s] The largest pressure advance the calibration can end up with
-    constexpr float max_pressure_advance = 0.2f;
-
     /// [s] How long to wait for the samples of a finished pattern to get here from the load cell
     constexpr int32_t sample_delivery_timeout_us = 300'000;
 
@@ -92,6 +90,10 @@ namespace {
 
     /// How long the outcome stays on the screen before whatever comes next replaces it
     constexpr int32_t outcome_display_time_ms = 2000;
+
+    /// The log is written out in the background, with little room for what waits for that.
+    /// So the lines of a longer listing are this far apart.
+    constexpr int32_t log_line_spacing_ms = 30;
 
     std::array<std::optional<Request>, PhysicalToolIndex::count> requests;
     std::array<std::optional<float>, PhysicalToolIndex::count> results;
@@ -136,6 +138,9 @@ namespace {
 
     SampleQueue sample_queue;
 
+    /// How the force follows the flow in the step being measured, if that is to be logged
+    ResponseCurve response_curve;
+
     /// @returns the slowest the extruder might accelerate during the pattern [mm/s^2]
     float e_acceleration(float slow_feedrate) {
         const auto &settings = planner.settings;
@@ -178,6 +183,41 @@ namespace {
         return "";
     }
 
+    void wait_for_log() {
+        const uint32_t start_ms = ticks_ms();
+        while (ticks_diff(ticks_ms(), start_ms) < log_line_spacing_ms && !planner.draining()) {
+            idle(true);
+        }
+    }
+
+    /// Logs how the force follows the flow changes of the step just measured, in thousandths of the
+    /// way from the force before a flow change to the settled one
+    void log_response_curve(float pressure_advance) {
+        static constexpr size_t points_per_line = 15;
+
+        for (const auto direction : { ResponseCurve::Direction::rising, ResponseCurve::Direction::falling }) {
+            for (size_t first = 0; first < ResponseCurve::size; first += points_per_line) {
+                ArrayStringBuilder<points_per_line * 6 + 1> points;
+                bool is_empty = true;
+                for (size_t i = first; i < std::min(first + points_per_line, ResponseCurve::size); i++) {
+                    if (const auto value = response_curve.at(direction, i)) {
+                        points.append_printf(" %i", static_cast<int>(std::lround(std::clamp(*value, -9.0f, 9.0f) * 1000)));
+                        is_empty = false;
+                    } else {
+                        points.append_string(" -");
+                    }
+                }
+                if (is_empty) {
+                    continue;
+                }
+                log_info(PressureAdvanceCalib, "K=%.4f %s %i ms:%s", static_cast<double>(pressure_advance),
+                    direction == ResponseCurve::Direction::rising ? "up" : "down",
+                    static_cast<int>(std::lround((ResponseCurve::begin + first * ResponseCurve::resolution) * 1000)), points.str());
+                wait_for_log();
+            }
+        }
+    }
+
     /// Moves the nozzle along the lane of the nozzle cleaner, to a Y in the coordinates of its sequences
     void move_along_cleaner_lane(float y) {
         std::array<char, 32> gcode;
@@ -187,7 +227,7 @@ namespace {
 
     /// Extrudes the pattern with the given pressure advance and evaluates how the force responds.
     /// The head goes back and forth around center_y meanwhile.
-    std::expected<StepResponse, Failure> measure_step_response(const Pattern &pattern, float pressure_advance, float smooth_time, float center_y) {
+    std::expected<StepResponse, Failure> measure_step_response(const Pattern &pattern, float pressure_advance, float smooth_time, float center_y, bool log_curve) {
         planner.synchronize();
         if (planner.draining()) {
             return std::unexpected(Failure::aborted);
@@ -195,11 +235,15 @@ namespace {
         pressure_advance::set_axis_e_config({ .pressure_advance = pressure_advance, .smooth_time = smooth_time });
 
         const float e_start = planner.get_axis_position_mm(E_AXIS);
+        if (log_curve) {
+            response_curve.clear();
+        }
         StepResponseAnalyzer analyzer({
             .pattern = pattern,
             .e_start = e_start,
             .pressure_advance = pressure_advance,
             .min_force_step = min_force_step,
+            .curve = log_curve ? &response_curve : nullptr,
         });
         const auto analyze_sample = [&](const Sample &sample) {
             analyzer.process(sample);
@@ -269,15 +313,21 @@ namespace {
             log_warning(PressureAdvanceCalib, "Load cell samples lost");
         }
 
+        // What the force did tells the most when it did not do what it should have
+        if (log_curve) {
+            log_response_curve(pressure_advance);
+        }
+
         const auto response = analyzer.result();
         if (!response) {
             log_error(PressureAdvanceCalib, "K=%.4f: %s", static_cast<double>(pressure_advance), to_string(response.error()));
             return std::unexpected(Failure::measurement_failed);
         }
 
-        log_info(PressureAdvanceCalib, "K=%.4f: lag %.4f s (+-%.4f), force step %.1f g, %u transitions",
-            static_cast<double>(pressure_advance), static_cast<double>(response->lag), static_cast<double>(response->lag_deviation),
-            static_cast<double>(response->force_step), response->transitions);
+        log_info(PressureAdvanceCalib, "K=%.4f: lag %.4f s (up %.4f, down %.4f, +-%.4f), force %.1f g, step %.1f g, %u changes",
+            static_cast<double>(pressure_advance), static_cast<double>(response->lag), static_cast<double>(response->rising_lag),
+            static_cast<double>(response->falling_lag), static_cast<double>(response->lag_deviation),
+            static_cast<double>(response->slow_force), static_cast<double>(response->force_step), response->transitions);
         metric_record_custom(&metric_step_response, " k=%.4f,lag=%.4f,dev=%.3f,f=%.0f,n=%ui",
             static_cast<double>(pressure_advance), static_cast<double>(response->lag), static_cast<double>(response->lag_deviation),
             static_cast<double>(response->force_step), response->transitions);
@@ -294,7 +344,7 @@ namespace {
         const float slow_feedrate = std::clamp(request.slow_feedrate.value_or(fast_feedrate * default_slow_feedrate_ratio), min_slow_feedrate, fast_feedrate * max_slow_feedrate_ratio);
         const float cleaner_y = std::clamp(request.cleaner_y.value_or(default_cleaner_y), Request::min_cleaner_y + wiggle / 2, Request::max_cleaner_y - wiggle / 2);
         PressureAdvanceSearch search({
-            .max_pressure_advance = max_pressure_advance,
+            .max_pressure_advance = Request::max_pressure_advance,
             .steps = request.steps,
         });
 
@@ -361,18 +411,35 @@ namespace {
             tool.to_raw(), request.nozzle_temperature, static_cast<double>(slow_feedrate), static_cast<double>(fast_feedrate),
             pattern.cycles, static_cast<double>(pattern.total_length()), static_cast<double>(cleaner_y));
 
-        while (const auto pressure_advance = search.next()) {
+        const auto next_pressure_advance = [&]() -> std::optional<float> {
+            if (!request.scan) {
+                return search.next();
+            }
+            if (step >= search.step_count()) {
+                return std::nullopt;
+            }
+            const float first = std::clamp(request.scan->first, 0.0f, Request::max_pressure_advance);
+            const float last = std::clamp(request.scan->last, 0.0f, Request::max_pressure_advance);
+            return first + (last - first) * step / (search.step_count() - 1);
+        };
+
+        while (const auto pressure_advance = next_pressure_advance()) {
             metric_record_custom(&metric_pattern, " k=%.4f,s=%.3f,f=%.3f,a=%.0f,w=%.3f,c=%ui",
                 static_cast<double>(*pressure_advance), static_cast<double>(pattern_params.slow_feedrate), static_cast<double>(pattern_params.fast_feedrate),
                 static_cast<double>(pattern_params.acceleration), static_cast<double>(pattern_params.smooth_time), pattern_params.cycles);
 
-            const auto response = measure_step_response(pattern, *pressure_advance, original_config.smooth_time, origin.y);
+            const auto response = measure_step_response(pattern, *pressure_advance, original_config.smooth_time, origin.y, request.log_response_curves);
             if (!response) {
                 return std::unexpected(response.error());
             }
             search.add(*pressure_advance, response->lag);
             step++;
             report_progress();
+        }
+
+        if (const auto line = search.fit()) {
+            log_info(PressureAdvanceCalib, "T%u: lag %.4f s without pressure advance, %.3f s less per second of it, +-%.4f s",
+                tool.to_raw(), static_cast<double>(line->lag_at_zero), static_cast<double>(-line->slope), static_cast<double>(line->residual));
         }
 
         const auto result = search.result();
