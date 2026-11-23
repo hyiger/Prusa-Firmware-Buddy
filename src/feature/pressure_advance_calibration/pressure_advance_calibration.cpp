@@ -19,6 +19,7 @@
 #include <feature/pressure_advance/pressure_advance_config.hpp>
 #include <feature/print_status_message/print_status_message_guard.hpp>
 #include <feature/prusa/e-stall_detector.h>
+#include <i18n.h>
 #include <logging/log.hpp>
 #include <mapi/motion.hpp>
 #include <mapi/parking.hpp>
@@ -169,6 +170,19 @@ namespace {
         return "";
     }
 
+    Failure to_failure(StepResponseError error) {
+        switch (error) {
+        case StepResponseError::incomplete:
+        case StepResponseError::unexpected_motion:
+            return Failure::extruder_off_pattern;
+        case StepResponseError::weak_signal:
+            return Failure::weak_force;
+        case StepResponseError::missing_samples:
+            return Failure::samples_lost;
+        }
+        return Failure::samples_lost;
+    }
+
     const char *to_string(SearchError error) {
         switch (error) {
         case SearchError::not_enough_data:
@@ -181,6 +195,19 @@ namespace {
             return "out of range";
         }
         return "";
+    }
+
+    Failure to_failure(SearchError error) {
+        switch (error) {
+        case SearchError::not_enough_data:
+        case SearchError::inconsistent:
+            return Failure::inconsistent;
+        case SearchError::noisy:
+            return Failure::noisy;
+        case SearchError::out_of_range:
+            return Failure::out_of_range;
+        }
+        return Failure::inconsistent;
     }
 
     void wait_for_log() {
@@ -275,7 +302,7 @@ namespace {
                 }
                 if (ticks_diff(ticks_us(), open_us) > sample_delivery_timeout_us) {
                     log_error(PressureAdvanceCalib, "No load cell samples");
-                    return std::unexpected(Failure::measurement_failed);
+                    return std::unexpected(Failure::no_samples);
                 }
                 idle(true);
             }
@@ -321,7 +348,7 @@ namespace {
         const auto response = analyzer.result();
         if (!response) {
             log_error(PressureAdvanceCalib, "K=%.4f: %s", static_cast<double>(pressure_advance), to_string(response.error()));
-            return std::unexpected(Failure::measurement_failed);
+            return std::unexpected(to_failure(response.error()));
         }
 
         log_info(PressureAdvanceCalib, "K=%.4f: lag %.4f s (up %.4f, down %.4f, +-%.4f), force %.1f g, step %.1f g, %u changes",
@@ -445,7 +472,7 @@ namespace {
         const auto result = search.result();
         if (!result) {
             log_error(PressureAdvanceCalib, "T%u: %s", tool.to_raw(), to_string(result.error()));
-            return std::unexpected(Failure::no_result);
+            return std::unexpected(to_failure(result.error()));
         }
         return *result;
     }
@@ -465,7 +492,11 @@ namespace {
             return result;
 
         } else {
-            status.update<PrintStatusMessage::Type::pressure_advance_calibration_failed>({ .progress = {}, .tool = tool.to_raw() });
+            // The message has nowhere else to carry what went wrong
+            status.update<PrintStatusMessage::Type::pressure_advance_calibration_failed>({
+                .progress = { .current = static_cast<float>(std::to_underlying(result.error())) },
+                .tool = tool.to_raw(),
+            });
         }
 
         const uint32_t shown_ms = ticks_ms();
@@ -476,6 +507,32 @@ namespace {
     }
 
 } // namespace
+
+const char *to_string(Failure failure) {
+    switch (failure) {
+    case Failure::not_ready:
+        return N_("printer not ready");
+    case Failure::aborted:
+        return N_("aborted");
+    case Failure::no_samples:
+        return N_("no load cell data");
+    case Failure::samples_lost:
+        return N_("load cell data lost");
+    case Failure::extruder_off_pattern:
+        return N_("extruder off its pattern");
+    case Failure::weak_force:
+        return N_("force does not follow the flow");
+    case Failure::inconsistent:
+        return N_("inconsistent force");
+    case Failure::noisy:
+        return N_("measurements disagree");
+    case Failure::out_of_range:
+        return N_("out of range");
+    case Failure::_cnt:
+        break;
+    }
+    return "";
+}
 
 bool is_enabled() {
     return config_store().pressure_advance_calibration.get();

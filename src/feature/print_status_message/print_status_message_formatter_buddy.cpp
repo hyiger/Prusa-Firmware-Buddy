@@ -10,9 +10,15 @@
 #endif
 
 #include <option/has_translations.h>
+#include <option/has_pressure_advance_calibration.h>
+#if HAS_PRESSURE_ADVANCE_CALIBRATION()
+    #include <feature/pressure_advance_calibration/pressure_advance_calibration.hpp>
+#endif
 
 #include <bsod/bsod.h>
 #include <utils/string_builder.hpp>
+
+#include <utility>
 
 using Message = PrintStatusMessage;
 
@@ -189,8 +195,18 @@ void PrintStatusMessageFormatterBuddy::format(StringBuilder &target, const Messa
     }
 
     case Message::Type::pressure_advance_calibration_failed: {
+        // The progress holds what went wrong
         const auto d = std::get<PrintStatusMessageDataToolProgress>(msg.data);
         target.append_printf("\nT%i", (int)(d.tool + 1));
+        if (d.progress.current >= 0 && d.progress.current < std::to_underlying(pressure_advance_calibration::Failure::_cnt)) {
+            const char *reason = pressure_advance_calibration::to_string(static_cast<pressure_advance_calibration::Failure>(d.progress.current));
+            target.append_string(": ");
+    #if HAS_TRANSLATIONS()
+            target.append_string_view(_(reason));
+    #else
+            target.append_string(reason);
+    #endif
+        }
         break;
     }
 #endif

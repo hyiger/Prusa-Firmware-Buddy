@@ -143,23 +143,7 @@ void PrusaGcodeSuite::M574() {
         sb.append_printf("Pressure advance T%u: %.4f", tool->to_raw(), static_cast<double>(*result));
         SERIAL_ECHO_START();
     } else {
-        using Failure = pressure_advance_calibration::Failure;
-        const char *reason = "";
-        switch (result.error()) {
-        case Failure::not_ready:
-            reason = "printer not ready";
-            break;
-        case Failure::aborted:
-            reason = "aborted";
-            break;
-        case Failure::measurement_failed:
-            reason = "measurement failed";
-            break;
-        case Failure::no_result:
-            reason = "no reliable result";
-            break;
-        }
-        sb.append_printf("M574: %s", reason);
+        sb.append_printf("M574: %s", pressure_advance_calibration::to_string(result.error()));
         SERIAL_ERROR_START();
     }
     SERIAL_ECHO(sb.str());
