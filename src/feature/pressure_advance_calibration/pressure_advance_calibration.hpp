@@ -41,6 +41,20 @@ struct Request {
     /// A spot known to be clear of the silicone if not given.
     std::optional<float> cleaner_y = std::nullopt;
 
+    /// Whether to log how the force follows the flow with each pressure advance tried
+    bool log_response_curves = false;
+
+    /// Pressure advance range [s] to try `steps` evenly spread values of, instead of closing in on
+    /// the value the calibration ends up with. For looking into how the force responds to the others.
+    struct Scan {
+        float first;
+        float last;
+    };
+    std::optional<Scan> scan = std::nullopt;
+
+    /// The largest pressure advance the calibration can try or end up with
+    static constexpr float max_pressure_advance = 0.2f;
+
     /// The part of the lane the eject strokes of the nozzle cleaner go through, so the nozzle can go anywhere in it
     static constexpr float min_cleaner_y = 76;
     static constexpr float max_cleaner_y = 93;
