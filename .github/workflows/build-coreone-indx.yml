@@ -195,7 +195,7 @@ jobs:
           - **Filament slots**: each tool records the vendor and color of its filament, picked while loading the way an AMS does it. PrusaSlicer Filament Edition reads them over PrusaLink.
           - **Prusa Connect**: the printer reports the plain version to Connect, so uploads work.
           - **Nozzle temperature**: INDX tools take targets up to 300 °C, where stock ${BASE_VERSION} stops at 290 °C. Not yet verified on hardware.
-          - **Automatic pressure advance**: the printer can measure the pressure advance of each tool with the load cell at the start of a print and use it in place of the one from the filament profile. Off by default. Tried on one printer with one filament so far, where it came out at, or somewhat under, what printed line tests looked best with.
+          - **Automatic pressure advance, Core One INDX only**: the printer can measure the pressure advance of each tool with the load cell at the start of a print and use it in place of the one from the filament profile. Off by default. Tried on one printer with one filament so far, where it came out at, or somewhat under, what printed line tests looked best with.
 
           The printer shows its version as `${VERSION}`, so it can be told apart from Prusa's build. Prusa Connect is the exception, see below.
 
@@ -226,6 +226,8 @@ jobs:
           This has not been tested on a printer. Nobody has yet confirmed that a nozzle settles at 300 °C without overshooting into the MAXTEMP error, or checked the head's infrared temperature reading against a thermometer that high. Check this on your own printer before printing at 300 °C.
 
           ### Automatic pressure advance
+
+          This is for the Core One INDX only. It measures in the wastebin and relies on the nozzle cleaner, so there is nothing of it in the firmware of printers with a Nextruder, and it is not turned on for the Core One L INDX, where it has not been tried.
 
           PrusaSlicer's Core One INDX profiles send two commands that stock ${BASE_VERSION} ignores: an `M574` for each tool before the tool offset calibration, and `M573 R` after the `M572` of each filament. This build acts on them once Settings > Auto Pressure Advance is turned on. It is off by default, and the commands are ignored as before while it is off.
 
