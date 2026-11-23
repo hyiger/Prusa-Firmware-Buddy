@@ -9,6 +9,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <optional>
@@ -100,11 +101,19 @@ struct StepResponse {
     /// [s] How much later than the commanded flow the force changes. Negative if it changes sooner.
     float lag;
 
+    /// [s] The lag of the flow changes to the fast feedrate alone, and of those to the slow one.
+    /// `lag` is the mean of the two.
+    float rising_lag;
+    float falling_lag;
+
     /// [s] Standard deviation of the lag of the individual flow changes
     float lag_deviation;
 
     /// [g] Force difference between the fast and the slow flow
     float force_step;
+
+    /// [g] Force with the slow flow, offset included
+    float slow_force;
 
     /// Number of flow changes the response is computed from
     uint8_t transitions;
@@ -124,6 +133,59 @@ enum class StepResponseError : uint8_t {
     missing_samples,
 };
 
+/// Course of the force around the flow changes of a pattern, averaged over the flow changes of
+/// each direction. The calibration does not need it, it is for looking into what the nozzle pressure does.
+class ResponseCurve {
+public:
+    /// [s] Time between two points of the curve
+    static constexpr float resolution = 0.01f;
+
+    /// [s] Where the curve begins, relative to the commanded flow change
+    static constexpr float begin = -0.05f;
+
+    /// Number of points, enough to reach the end of the plateau the force settles in
+    static constexpr size_t size = 45;
+
+    enum class Direction : uint8_t {
+        rising,
+        falling,
+    };
+
+    /// Forgets the curves, keeps the samples
+    void clear();
+
+    /// To be called with every sample, ordered by time. Only the latest ones are kept.
+    void add_sample(uint32_t time_us, float force);
+
+    /// Adds the samples around a flow change to the curve of its direction
+    /// @param time_us when the flow has been commanded to change
+    /// @param force_before force before the flow change
+    /// @param force_step how much the force has changed by the time it settled
+    void add_flow_change(Direction direction, uint32_t time_us, float force_before, float force_step);
+
+    /// @returns the force at a point of the curve, as the part of the way from the force before the
+    /// flow change (0) to the settled one (1). Nothing if no sample has fallen there.
+    std::optional<float> at(Direction direction, size_t index) const;
+
+private:
+    struct StoredSample {
+        uint32_t time_us;
+        float force;
+    };
+
+    struct Point {
+        float sum = 0;
+        uint16_t count = 0;
+    };
+
+    /// Half a second of samples, which is what a curve spans
+    std::array<StoredSample, 192> samples_;
+    uint8_t sample_count_ = 0;
+    uint8_t next_sample_ = 0;
+
+    std::array<std::array<Point, size>, 2> points_;
+};
+
 /// Evaluates the step response from samples as they come, without storing them
 class StepResponseAnalyzer {
 public:
@@ -141,6 +203,9 @@ public:
 
         /// [s] How old the force in a sample is by the time of its timestamp
         float force_delay = 0;
+
+        /// Gets the course of the force around the flow changes, if set. Has to outlive the analyzer.
+        ResponseCurve *curve = nullptr;
     };
 
     /// Samples further apart than this around a flow change make it unusable
@@ -204,9 +269,10 @@ private:
         uint8_t count = 0;
         double lag = 0;
         double lag_squared = 0;
+        double force_before = 0;
         double force_step = 0;
 
-        void add(double lag_s, double force_step_g);
+        void add(double lag_s, double force_before_g, double force_step_g);
         double mean_lag() const;
         double squared_deviations() const;
     };
@@ -302,19 +368,22 @@ public:
     /// @returns the pressure advance [s] the lag is zero with
     std::expected<float, SearchError> result() const;
 
-private:
+    /// The lag as a line over the pressure advance
     struct Line {
-        float lag_at_zero;
-        float slope;
-        float residual;
+        float lag_at_zero; ///< [s]
+        float slope; ///< [s of lag per s of pressure advance]
+        float residual; ///< [s] RMS distance of the weighted lags from the line
 
         bool is_slope_plausible() const {
             return slope >= min_slope && slope <= max_slope;
         }
     };
 
+    /// @returns the line through the step responses added so far, the one result() comes from.
+    /// Nothing if there are too few of them to fit one.
     std::optional<Line> fit() const;
 
+private:
     struct Point {
         float pressure_advance;
         float lag;

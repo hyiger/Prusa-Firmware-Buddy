@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace pressure_advance_calibration {
 
@@ -59,6 +60,41 @@ Pattern plan_pattern(const PatternParams &params) {
     };
 }
 
+void ResponseCurve::clear() {
+    points_ = {};
+}
+
+void ResponseCurve::add_sample(uint32_t time_us, float force) {
+    samples_[next_sample_] = { .time_us = time_us, .force = force };
+    next_sample_ = (next_sample_ + 1) % samples_.size();
+    sample_count_ = std::min<size_t>(sample_count_ + 1, samples_.size());
+}
+
+void ResponseCurve::add_flow_change(Direction direction, uint32_t time_us, float force_before, float force_step) {
+    if (force_step == 0) {
+        return;
+    }
+    auto &points = points_[std::to_underlying(direction)];
+    for (uint8_t i = 0; i < sample_count_; i++) {
+        const StoredSample &sample = samples_[i];
+        const double index = std::floor((seconds_between(time_us, sample.time_us) - static_cast<double>(begin)) / static_cast<double>(resolution));
+        if (index < 0 || index >= size) {
+            continue;
+        }
+        Point &point = points[static_cast<size_t>(index)];
+        point.sum += (sample.force - force_before) / force_step;
+        point.count++;
+    }
+}
+
+std::optional<float> ResponseCurve::at(Direction direction, size_t index) const {
+    const Point &point = points_[std::to_underlying(direction)][index];
+    if (point.count == 0) {
+        return std::nullopt;
+    }
+    return point.sum / point.count;
+}
+
 StepResponseAnalyzer::StepResponseAnalyzer(const Config &config)
     : config_(config)
     , leg_end_(config.pattern.leg_length(0)) {}
@@ -67,10 +103,11 @@ double StepResponseAnalyzer::PlateauFit::e_at(uint32_t time_us) const {
     return e_at_origin + feedrate * seconds_between(origin_us, time_us);
 }
 
-void StepResponseAnalyzer::LagStats::add(double lag_s, double force_step_g) {
+void StepResponseAnalyzer::LagStats::add(double lag_s, double force_before_g, double force_step_g) {
     count++;
     lag += lag_s;
     lag_squared += lag_s * lag_s;
+    force_before += force_before_g;
     force_step += force_step_g;
 }
 
@@ -132,7 +169,14 @@ void StepResponseAnalyzer::evaluate_transition(const PlateauFit &before, const P
     // Pressure advance makes the motor lead the commanded motion by the pressure advance time
     const double command_time = motor_time + static_cast<double>(config_.pressure_advance);
 
-    (after_is_fast ? rising_ : falling_).add(force_time - command_time, force_step);
+    (after_is_fast ? rising_ : falling_).add(force_time - command_time, before.force, force_step);
+
+    if (config_.curve) {
+        // The force in a sample is older than its timestamp, which makes the flow change look that much later to it
+        const auto command_us = static_cast<int32_t>(std::lround((command_time + static_cast<double>(config_.force_delay)) * 1e6));
+        config_.curve->add_flow_change(after_is_fast ? ResponseCurve::Direction::rising : ResponseCurve::Direction::falling,
+            window_.end_us + static_cast<uint32_t>(command_us), static_cast<float>(before.force), static_cast<float>(force_step));
+    }
 }
 
 void StepResponseAnalyzer::close_plateau() {
@@ -161,12 +205,18 @@ void StepResponseAnalyzer::process(const Sample &sample) {
     if (!previous_) {
         previous_ = sample;
         nominal_e_ = e;
+        if (config_.curve) {
+            config_.curve->add_sample(sample.time_us, sample.force);
+        }
         return;
     }
 
     const double dt = seconds_between(previous_->time_us, sample.time_us);
     if (dt <= 0) {
         return;
+    }
+    if (config_.curve) {
+        config_.curve->add_sample(sample.time_us, sample.force);
     }
 
     // The motor is ahead of the commanded position by the commanded feedrate times the pressure
@@ -255,10 +305,16 @@ std::expected<StepResponse, StepResponseError> StepResponseAnalyzer::result() co
         return std::unexpected(StepResponseError::weak_signal);
     }
 
+    // The slow flow is what a rising flow change starts from and a falling one ends up at
+    const double slow_force = (rising_.force_before + falling_.force_before + falling_.force_step) / transitions;
+
     return StepResponse {
         .lag = static_cast<float>((rising_.mean_lag() + falling_.mean_lag()) / 2),
+        .rising_lag = static_cast<float>(rising_.mean_lag()),
+        .falling_lag = static_cast<float>(falling_.mean_lag()),
         .lag_deviation = static_cast<float>(std::sqrt((rising_.squared_deviations() + falling_.squared_deviations()) / transitions)),
         .force_step = static_cast<float>(force_step),
+        .slow_force = static_cast<float>(slow_force),
         .transitions = transitions,
     };
 }
