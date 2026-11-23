@@ -21,6 +21,10 @@ struct Simulation {
 
     /// [g per mm/s] Negative if the load cell is mounted the other way
     double force_per_feedrate = 80;
+
+    /// How much of the force follows the extruder at once instead of the nozzle pressure,
+    /// the way friction along the filament path would
+    double direct_force_ratio = 0;
     double force_offset = -350;
     double force_noise = 2;
 
@@ -140,7 +144,7 @@ struct Simulation {
         for (size_t i = 1; i < motor.size(); i++) {
             const double motor_feedrate = (motor[i] - motor[i - 1]) / dt;
             pressure += (motor_feedrate - pressure) * (1 - std::exp(-dt / time_constant));
-            force[i] = force_offset + force_per_feedrate * pressure;
+            force[i] = force_offset + force_per_feedrate * (direct_force_ratio * motor_feedrate + (1 - direct_force_ratio) * pressure);
         }
 
         std::mt19937 generator(noise_seed + static_cast<uint32_t>(pressure_advance * 1e6));
@@ -362,6 +366,140 @@ TEST_CASE("pressure_advance_calibration::StepResponseAnalyzer errors", "[pressur
         REQUIRE(response.has_value());
         CHECK(response->lag == reference->lag);
     }
+}
+
+TEST_CASE("pressure_advance_calibration::StepResponseAnalyzer directions", "[pressure_advance_calibration]") {
+    Simulation simulation;
+    const auto response = simulation.measure(0.02);
+    REQUIRE(response.has_value());
+
+    CHECK_THAT(response->lag, WithinAbs((response->rising_lag + response->falling_lag) / 2, 1e-6));
+    CHECK_THAT(response->rising_lag, WithinAbs(response->lag, 0.004));
+    CHECK_THAT(response->slow_force, WithinAbs(simulation.force_offset + simulation.force_per_feedrate * simulation.slow_feedrate, 2.0));
+}
+
+TEST_CASE("pressure_advance_calibration::ResponseCurve", "[pressure_advance_calibration]") {
+    using Direction = ResponseCurve::Direction;
+
+    Simulation simulation;
+    simulation.force_noise = 0;
+
+    ResponseCurve curve;
+    const auto measure = [&](double pressure_advance) {
+        auto config = simulation.analyzer_config(pressure_advance);
+        config.curve = &curve;
+        REQUIRE(simulation.measure(config).has_value());
+    };
+
+    // The middle of a point of the curve, relative to the commanded flow change
+    const auto time_at = [](size_t index) {
+        return static_cast<double>(ResponseCurve::begin) + (index + 0.5) * static_cast<double>(ResponseCurve::resolution);
+    };
+
+    SECTION("Empty before anything is measured") {
+        for (size_t i = 0; i < ResponseCurve::size; i++) {
+            CHECK_FALSE(curve.at(Direction::rising, i).has_value());
+            CHECK_FALSE(curve.at(Direction::falling, i).has_value());
+        }
+    }
+
+    SECTION("Follows the force without pressure advance") {
+        // The part of the force that follows the extruder at once shows as a jump at the flow change
+        simulation.direct_force_ratio = GENERATE(0.0, 0.35);
+        const Direction direction = GENERATE(Direction::rising, Direction::falling);
+        CAPTURE(simulation.direct_force_ratio, direction);
+        measure(0);
+
+        size_t points_checked = 0;
+        for (size_t i = 0; i < ResponseCurve::size; i++) {
+            const double time = time_at(i);
+            const auto value = curve.at(direction, i);
+            CAPTURE(time);
+
+            // The curve ends where the plateau the force settles in does
+            if (time < 0.25) {
+                REQUIRE(value.has_value());
+            }
+            if (!value) {
+                continue;
+            }
+            if (time < -0.015) {
+                CHECK_THAT(*value, WithinAbs(0, 0.03));
+            } else if (time > 0.015) {
+                const double pressure = 1 - std::exp(-time / simulation.time_constant);
+                CHECK_THAT(*value, WithinAbs(simulation.direct_force_ratio + (1 - simulation.direct_force_ratio) * pressure, 0.05));
+                points_checked++;
+            }
+        }
+        CHECK(points_checked >= 20);
+    }
+
+    SECTION("A step with the pressure advance that makes up for the delay") {
+        const Direction direction = GENERATE(Direction::rising, Direction::falling);
+        measure(simulation.time_constant);
+
+        for (size_t i = 0; i < ResponseCurve::size; i++) {
+            const double time = time_at(i);
+            const auto value = curve.at(direction, i);
+            CAPTURE(direction, time);
+            if (!value) {
+                continue;
+            }
+            if (time < -0.035) {
+                CHECK_THAT(*value, WithinAbs(0, 0.03));
+            } else if (time > 0.035) {
+                CHECK_THAT(*value, WithinAbs(1, 0.03));
+            }
+        }
+    }
+
+    SECTION("Each direction has its own curve") {
+        auto config = simulation.analyzer_config(0);
+        config.curve = &curve;
+        StepResponseAnalyzer analyzer(config);
+
+        // Up to the middle of the first slow leg after a fast one: by then the force has settled
+        // after the first flow change to the fast feedrate, but not yet after the one back
+        const Pattern pattern = simulation.pattern();
+        const double duration = Simulation::rest_time + static_cast<double>(pattern.lead_in_length / pattern.slow_feedrate + pattern.fast_length / pattern.fast_feedrate + pattern.slow_length / pattern.slow_feedrate / 2);
+        for (const Sample &sample : simulation.samples(0)) {
+            if (sample.time_us - simulation.start_time_us > duration * 1e6) {
+                break;
+            }
+            analyzer.process(sample);
+        }
+
+        CHECK(curve.at(Direction::rising, 10).has_value());
+        CHECK_FALSE(curve.at(Direction::falling, 10).has_value());
+    }
+
+    SECTION("clear() forgets the curves") {
+        measure(0);
+        REQUIRE(curve.at(Direction::rising, 10).has_value());
+
+        curve.clear();
+        for (size_t i = 0; i < ResponseCurve::size; i++) {
+            CHECK_FALSE(curve.at(Direction::rising, i).has_value());
+            CHECK_FALSE(curve.at(Direction::falling, i).has_value());
+        }
+    }
+}
+
+TEST_CASE("pressure_advance_calibration::PressureAdvanceSearch fit", "[pressure_advance_calibration]") {
+    PressureAdvanceSearch search({});
+    CHECK_FALSE(search.fit().has_value());
+
+    search.add(0, 0.05f);
+    CHECK_FALSE(search.fit().has_value());
+
+    search.add(0.05f, 0);
+    search.add(0.025f, 0.025f);
+    const auto line = search.fit();
+    REQUIRE(line.has_value());
+    CHECK_THAT(line->slope, WithinAbs(-1, 1e-3));
+    CHECK_THAT(line->lag_at_zero, WithinAbs(0.05, 1e-4));
+    CHECK(line->residual < 1e-4f);
+    CHECK(line->is_slope_plausible());
 }
 
 TEST_CASE("pressure_advance_calibration::PressureAdvanceSearch", "[pressure_advance_calibration]") {
