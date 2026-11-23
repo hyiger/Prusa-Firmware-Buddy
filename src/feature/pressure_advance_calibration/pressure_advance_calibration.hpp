@@ -67,12 +67,32 @@ enum class Failure : uint8_t {
     /// The print got stopped in the meantime
     aborted,
 
-    /// The force does not tell enough about the nozzle pressure
-    measurement_failed,
+    /// Nothing comes from the load cell
+    no_samples,
 
-    /// The pressure advance does not come out of the measurement reliably, or not within the supported range
-    no_result,
+    /// Too many load cell samples got lost on the way
+    samples_lost,
+
+    /// The extruder did not move the way the measurement needs it to
+    extruder_off_pattern,
+
+    /// The force changes too little with the flow, or not in step with it
+    weak_force,
+
+    /// The force does not follow the pressure advance the way the nozzle pressure would
+    inconsistent,
+
+    /// The measurements with the individual pressure advance values do not agree with each other
+    noisy,
+
+    /// The pressure advance comes out outside of the supported range
+    out_of_range,
+
+    _cnt,
 };
+
+/// @returns what went wrong, in a few words of English that have a translation
+const char *to_string(Failure failure);
 
 /// @returns whether the user has the calibration turned on. Nothing gets calibrated or applied otherwise.
 bool is_enabled();
