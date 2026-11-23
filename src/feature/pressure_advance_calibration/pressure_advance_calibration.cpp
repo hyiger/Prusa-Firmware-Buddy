@@ -65,6 +65,9 @@ namespace {
     constexpr uint8_t min_cycles = 2;
     constexpr uint8_t max_cycles = 8;
 
+    // The moves of a pattern are queued in one go, with nothing taking the load cell samples away while that waits
+    static_assert(2 * max_cycles + 1 < BLOCK_BUFFER_SIZE);
+
     /// [mm] The pressure advance only applies while the head moves, so the head goes back and forth by this much
     constexpr float wiggle = 0.4f;
 
@@ -367,7 +370,7 @@ namespace {
             return std::unexpected(Failure::not_ready);
         }
 
-        const float fast_feedrate = std::clamp(request.feedrate, min_feedrate, max_feedrate);
+        const float fast_feedrate = std::clamp(std::min(request.feedrate, request.measured_feedrate_limit), min_feedrate, max_feedrate);
         const float slow_feedrate = std::clamp(request.slow_feedrate.value_or(fast_feedrate * default_slow_feedrate_ratio), min_slow_feedrate, fast_feedrate * max_slow_feedrate_ratio);
         const float cleaner_y = std::clamp(request.cleaner_y.value_or(default_cleaner_y), Request::min_cleaner_y + wiggle / 2, Request::max_cleaner_y - wiggle / 2);
         PressureAdvanceSearch search({
