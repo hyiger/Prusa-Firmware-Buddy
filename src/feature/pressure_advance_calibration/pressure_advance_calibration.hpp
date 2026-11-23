@@ -25,14 +25,20 @@ struct Request {
     /// [°C]
     int16_t nozzle_temperature;
 
-    /// [mm/s of filament] Feedrate of the flow the pressure advance is to suit
+    /// [mm/s of filament] Feedrate of the fastest flow of the print
     float feedrate;
 
-    /// [mm/s of filament] Feedrate the extrusion drops to in between, a quarter of `feedrate` if not given
+    /// [mm/s of filament] The fastest the measurement extrudes, a higher `feedrate` is measured at this.
+    /// A nozzle needs the less pressure advance the faster the filament flows, and prints have turned
+    /// out to look best with the pressure advance of a slow flow, however fast they go themselves.
+    float measured_feedrate_limit = 2;
+
+    /// [mm/s of filament] Feedrate the extrusion drops to in between, a quarter of the fast one if not given
     std::optional<float> slow_feedrate = std::nullopt;
 
-    /// How many times the extrusion goes fast with each pressure advance tried
-    uint8_t cycles = 4;
+    /// How many times the extrusion goes fast with each pressure advance tried.
+    /// The force of a slow flow takes this many to average out.
+    uint8_t cycles = 8;
 
     /// How many pressure advance values are tried
     uint8_t steps = 4;
