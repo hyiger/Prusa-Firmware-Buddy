@@ -58,6 +58,8 @@
 #include <option/has_usb_drive_format.h>
 #if HAS_USB_DRIVE_FORMAT()
     #include <async_job/async_job.hpp>
+    #include <transfers/changed_path.hpp>
+    #include <transfers/files.hpp>
     #include <transfers/monitor.hpp>
     #include <usb_host.h>
 #endif
@@ -1081,6 +1083,8 @@ void MI_FORMAT_USB_DRIVE::click(IWindowMenu & /*window_menu*/) {
     window_dlg_wait_t::wait_until(_("Formatting USB drive"), [&] { return !job.is_active(); });
 
     if (job.state() == AsyncJobBase::State::finished && job.result()) {
+        // PrusaLink and Connect list the files anew only when told of a change
+        transfers::ChangedPath::instance.changed_path(transfers::USB_MOUNT_POINT, transfers::ChangedPath::Type::Folder, transfers::ChangedPath::Incident::Combined);
         MsgBoxInfo(_("USB drive formatted."), Responses_Ok);
     } else {
         MsgBoxError(_("Formatting of the USB drive failed."), Responses_Ok);
