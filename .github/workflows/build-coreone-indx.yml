@@ -196,6 +196,7 @@ jobs:
           - **Prusa Connect**: the printer reports the plain version to Connect, so uploads work.
           - **Nozzle temperature**: INDX tools take targets up to 300 °C, where stock ${BASE_VERSION} stops at 290 °C. Not yet verified on hardware.
           - **Automatic pressure advance, Core One INDX only**: the printer can measure the pressure advance of each tool with the load cell at the start of a print and use it in place of the one from the filament profile. Off by default. Tried on one printer with three filaments so far, where it came out within about 30 % of what printed line tests of the same speed looked best with.
+          - **Formatting the USB drive**: Settings > System > Format USB Drive erases the drive in the printer and makes it FAT32, the file system the printer reads. Not yet tried on a printer.
 
           The printer shows its version as `${VERSION}`, so it can be told apart from Prusa's build. Prusa Connect is the exception, see below.
 
@@ -247,6 +248,16 @@ jobs:
           So it will not beat a pressure advance that has been tuned by hand for the speed a print goes at. It can do better than a value from a profile that was tuned for another speed or another material. Compare what `M574 ... I` comes up with to a printed test of your own, at the speed you print at, before leaving the setting on for prints that matter.
 
           The first release of this, 8.0.1-hy.4, measured at 2 mm/s of filament at the most, whatever the print's flow. That matched the PCTG it was tried with and came out at more than double for one of the PLAs.
+
+          ### Formatting the USB drive
+
+          Settings > System > Format USB Drive erases the drive that is in the printer and makes a single FAT32 volume of all of it, after asking. That is the file system the printer reads, so it also takes a drive the printer turns down with "Unknown file system", such as one that came formatted as exFAT, and a drive above 32 GB, which Windows does not offer to format as FAT32.
+
+          It is a quick format: the file system is made anew and the old data is not overwritten. The printer writes about 8 MB for a 32 GB drive and 64 MB for a 256 GB one, over a USB port that passes 1 MB a second at the most, so count with ten seconds or so for the first and more than a minute for the second. The screen shows "Formatting USB drive" until it is done; leave the drive in until then.
+
+          The printer refuses while it prints, while a file is being transferred and while Save Logs To File is on. A drive of less than 40 MB is too small for FAT32 and fails.
+
+          This has been checked on a computer only, with the printer's own file system code formatting drive images from 40 MB to 1 TB that `fsck` then found no fault with. It has not been run on a printer yet.
 
           ### Flashing
 
