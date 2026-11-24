@@ -56,7 +56,8 @@ namespace {
     constexpr float min_feedrate = 1.0f;
     constexpr float max_feedrate = 8.0f;
 
-    constexpr float default_slow_feedrate_ratio = 0.25f;
+    /// Printed pressure advance tests commonly slow down to a tenth, so that is what a result can be checked against
+    constexpr float default_slow_feedrate_ratio = 0.1f;
 
     /// The two feedrates have to stay far enough apart for the force to tell them from each other
     constexpr float max_slow_feedrate_ratio = 0.6f;
@@ -64,6 +65,11 @@ namespace {
 
     constexpr uint8_t min_cycles = 2;
     constexpr uint8_t max_cycles = 8;
+
+    /// Unless told how many cycles to do, each pressure advance tried gets as many as fit into this
+    /// much filament [mm], but no fewer than it takes to tell the lag from its scatter
+    constexpr float default_step_length = 8.0f;
+    constexpr uint8_t default_min_cycles = 4;
 
     // The moves of a pattern are queued in one go, with nothing taking the load cell samples away while that waits
     static_assert(2 * max_cycles + 1 < BLOCK_BUFFER_SIZE);
@@ -370,7 +376,7 @@ namespace {
             return std::unexpected(Failure::not_ready);
         }
 
-        const float fast_feedrate = std::clamp(std::min(request.feedrate, request.measured_feedrate_limit), min_feedrate, max_feedrate);
+        const float fast_feedrate = std::clamp(request.feedrate, min_feedrate, max_feedrate);
         const float slow_feedrate = std::clamp(request.slow_feedrate.value_or(fast_feedrate * default_slow_feedrate_ratio), min_slow_feedrate, fast_feedrate * max_slow_feedrate_ratio);
         const float cleaner_y = std::clamp(request.cleaner_y.value_or(default_cleaner_y), Request::min_cleaner_y + wiggle / 2, Request::max_cleaner_y - wiggle / 2);
         PressureAdvanceSearch search({
@@ -429,13 +435,16 @@ namespace {
 
         const MachinePosXYZE origin = current_machine_position();
 
-        const PatternParams pattern_params {
+        PatternParams pattern_params {
             .slow_feedrate = slow_feedrate,
             .fast_feedrate = fast_feedrate,
             .acceleration = e_acceleration(slow_feedrate),
             .smooth_time = original_config.smooth_time,
-            .cycles = std::clamp(request.cycles, min_cycles, max_cycles),
+            .cycles = 0,
         };
+        pattern_params.cycles = request.cycles
+            ? std::clamp(*request.cycles, min_cycles, max_cycles)
+            : plan_cycles(pattern_params, default_step_length, default_min_cycles, max_cycles);
         const Pattern pattern = plan_pattern(pattern_params);
         log_info(PressureAdvanceCalib, "T%u: %i C, %.2f/%.2f mm/s, %u cycles, %.1f mm of filament per step, at Y%.1f of the cleaner",
             tool.to_raw(), request.nozzle_temperature, static_cast<double>(slow_feedrate), static_cast<double>(fast_feedrate),
