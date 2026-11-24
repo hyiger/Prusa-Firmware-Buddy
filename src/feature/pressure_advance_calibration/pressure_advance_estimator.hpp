@@ -96,6 +96,11 @@ struct PatternParams {
 /// Lays the pattern out so that the flow is steady in the plateaus even with the slowest acceleration
 Pattern plan_pattern(const PatternParams &params);
 
+/// @returns how many cycles a pattern with these feedrates gets within `length` of filament [mm],
+/// but `min_cycles` at the least and `max_cycles` at the most. `params.cycles` is not used.
+/// The faster the flow, the more filament a cycle takes, and the fewer of them the lag takes to show.
+uint8_t plan_cycles(const PatternParams &params, float length, uint8_t min_cycles, uint8_t max_cycles);
+
 /// How the force responds to the flow changes of one pattern
 struct StepResponse {
     /// [s] How much later than the commanded flow the force changes. Negative if it changes sooner.

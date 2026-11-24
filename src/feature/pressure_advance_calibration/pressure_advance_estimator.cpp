@@ -60,6 +60,14 @@ Pattern plan_pattern(const PatternParams &params) {
     };
 }
 
+uint8_t plan_cycles(const PatternParams &params, float length, uint8_t min_cycles, uint8_t max_cycles) {
+    PatternParams one_cycle = params;
+    one_cycle.cycles = 1;
+    const Pattern pattern = plan_pattern(one_cycle);
+    const float cycles = std::floor((length - pattern.lead_in_length) / (pattern.slow_length + pattern.fast_length));
+    return static_cast<uint8_t>(std::clamp(cycles, static_cast<float>(min_cycles), static_cast<float>(max_cycles)));
+}
+
 void ResponseCurve::clear() {
     points_ = {};
 }
