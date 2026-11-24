@@ -42,5 +42,11 @@ struct UsbhMscRequest {
 
 USBH_StatusTypeDef usbh_msc_submit_request(UsbhMscRequest *);
 
+/// Makes the read and write requests of all tasks but the calling one fail, until the drive is released.
+/// Requests already waiting are still carried out.
+void usbh_msc_claim_drive();
+
+void usbh_msc_release_drive();
+
 #define USBH_MSC_RW_MAX_DELAY_MS (10000)
 #define USBH_MSC_RW_MAX_DELAY    (USBH_MSC_RW_MAX_DELAY_MS / portTICK_PERIOD_MS)

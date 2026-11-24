@@ -9,6 +9,17 @@
 #include <atomic>
 #include "marlin_client.hpp"
 #include <bsod/bsod.h>
+#include <option/has_usb_drive_format.h>
+
+#if HAS_USB_DRIVE_FORMAT()
+    #include "usbh_async_diskio.hpp"
+    #include <heap.h>
+    #include <logging/log.hpp>
+    #include <raii/scope_guard.hpp>
+    #include <cstdlib>
+
+LOG_COMPONENT_REF(USBHost);
+#endif
 
 USBH_HandleTypeDef hUsbHostHS;
 
@@ -29,6 +40,72 @@ bool is_media_inserted_since_startup() {
 void disable_media() {
     media_inserted = false;
 }
+
+#if HAS_USB_DRIVE_FORMAT()
+namespace {
+
+    /// Mounts the volume if it is not mounted.
+    FRESULT open_root_directory() {
+        DIR directory;
+        const FRESULT result = f_opendir(&directory, USBHPath);
+        if (result == FR_OK) {
+            f_closedir(&directory);
+        }
+        return result;
+    }
+
+} // namespace
+
+bool is_drive_attached() {
+    return !(disk_status(0) & STA_NOINIT);
+}
+
+bool format_drive() {
+    if (!is_drive_attached()) {
+        return false;
+    }
+
+    // The file allocation table, megabytes of it on a large drive, is written a buffer at a time.
+    size_t work_size = 16 * FF_MAX_SS;
+    void *work = nullptr;
+    while (!(work = malloc_fallible(work_size)) && work_size > FF_MAX_SS) {
+        work_size /= 2;
+    }
+    if (!work) {
+        log_error(USBHost, "No memory to format the drive");
+        return false;
+    }
+    ScopeGuard free_work = [&] { free(work); };
+
+    usbh_msc_claim_drive();
+    ScopeGuard release_drive = [] { usbh_msc_release_drive(); };
+
+    // A file system call another task was in the middle of may still write. It holds the volume
+    // lock until it is over, and any call of ours waits for that lock.
+    (void)open_root_directory();
+
+    static constexpr MKFS_PARM parameters {
+        .fmt = FM_FAT32,
+        .n_fat = 2,
+        // 4 MiB, as on SD cards: flash memory writes clusters that start on its own block boundaries faster
+        .align = 8192,
+        .n_root = 0,
+        .au_size = 0,
+    };
+    FRESULT result = f_mkfs(USBHPath, &parameters, work, work_size);
+    if (result == FR_OK) {
+        result = open_root_directory();
+    }
+    if (result != FR_OK) {
+        log_error(USBHost, "Formatting the drive failed: %d", static_cast<int>(result));
+        return false;
+    }
+
+    // The drive may have been disabled for a file system the printer could not read
+    media_inserted = true;
+    return true;
+}
+#endif
 
 } // namespace usb_host
 
