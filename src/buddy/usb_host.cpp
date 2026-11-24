@@ -16,7 +16,9 @@
     #include <heap.h>
     #include <logging/log.hpp>
     #include <raii/scope_guard.hpp>
+    #include <algorithm>
     #include <cstdlib>
+    #include <cstring>
 
 LOG_COMPONENT_REF(USBHost);
 #endif
@@ -83,6 +85,21 @@ bool format_drive() {
     // A file system call another task was in the middle of may still write. It holds the volume
     // lock until it is over, and any call of ours waits for that lock.
     (void)open_root_directory();
+
+    // f_mkfs writes the partition table last. So that a format that does not get that far leaves no
+    // file system behind, and not the previous one with a part of it overwritten, the old partition
+    // tables go first: all the sectors ahead of the new volume, which hold the MBR and a GPT.
+    static constexpr LBA_t volume_start = 63;
+    const UINT work_sectors = work_size / FF_MAX_SS;
+    memset(work, 0, work_size);
+    for (LBA_t sector = 0; sector < volume_start;) {
+        const UINT count = std::min<LBA_t>(work_sectors, volume_start - sector);
+        if (disk_write(0, static_cast<const BYTE *>(work), sector, count) != RES_OK) {
+            log_error(USBHost, "Formatting the drive failed: cannot write to it");
+            return false;
+        }
+        sector += count;
+    }
 
     static constexpr MKFS_PARM parameters {
         .fmt = FM_FAT32,

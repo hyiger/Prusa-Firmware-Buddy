@@ -22,8 +22,9 @@ bool is_drive_attached();
 
 /// Erases the attached drive: makes a single FAT32 volume of all of it.
 ///
-/// Blocks until done, tens of seconds on a large drive. The access of other tasks to the drive fails
-/// meanwhile and the files they have open on it are lost, so call it when nothing uses the drive.
+/// Blocks until done: seconds on a small drive, minutes on a very large one. The access of other tasks
+/// to the drive fails meanwhile and the files they have open on it are lost, so call it when nothing
+/// uses the drive. A format that fails after its first write leaves the drive with no file system.
 /// \returns whether the drive was formatted and its new file system mounts
 bool format_drive();
     #endif
