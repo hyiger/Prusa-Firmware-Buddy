@@ -26,6 +26,7 @@
 #include <option/has_tool_mapping.h>
 #include <option/has_wastebin_fill_tracking.h>
 #include <option/has_extruder_fsensor.h>
+#include <option/has_usb_drive_format.h>
 #include <meta_utils.hpp>
 #include <gui/menu_item/menu_item_gcode_action.hpp>
 
@@ -619,6 +620,16 @@ public:
     MI_LOG_TO_TXT();
     void OnChange(size_t) final;
 };
+
+#if HAS_USB_DRIVE_FORMAT()
+class MI_FORMAT_USB_DRIVE : public IWindowMenuItem {
+public:
+    MI_FORMAT_USB_DRIVE();
+
+protected:
+    void click(IWindowMenu &window_menu) override;
+};
+#endif
 
 #if HAS_AUTO_RETRACT()
 class MI_PRE_NOZZLE_CLEANING_RETRACT : public WI_ICON_SWITCH_OFF_ON_t {

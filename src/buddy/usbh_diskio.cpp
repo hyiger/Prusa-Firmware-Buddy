@@ -10,6 +10,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <utility_extensions.hpp>
+#include <atomic>
 #include <bit>
 #include <FreeRTOS.h>
 #include <logging/log.hpp>
@@ -51,6 +52,22 @@ static QueueHandle_t request_queue;
 static StaticQueue_t queue;
 static uint8_t storage_area[queue_length * sizeof(UsbhMscRequest *)];
 
+/// The only task whose requests are accepted, if there is one
+static std::atomic<TaskHandle_t> drive_owner = nullptr;
+
+static bool is_request_allowed() {
+    const TaskHandle_t owner = drive_owner.load();
+    return owner == nullptr || owner == xTaskGetCurrentTaskHandle();
+}
+
+void usbh_msc_claim_drive() {
+    drive_owner = xTaskGetCurrentTaskHandle();
+}
+
+void usbh_msc_release_drive() {
+    drive_owner = nullptr;
+}
+
 void USBH_worker_notify(USBH_StatusTypeDef, void *semaphore, void *) {
     static_cast<freertos::BinarySemaphore *>(semaphore)->release();
 }
@@ -74,6 +91,10 @@ static USBH_StatusTypeDef USBH_exec(UsbhMscRequest::UsbhMscRequestOperation oper
     };
     UsbhMscRequest *request_ptr = &request;
 
+    if (!is_request_allowed()) {
+        return USBH_FAIL;
+    }
+
     if (xQueueSend(request_queue, &request_ptr, USBH_MSC_RW_MAX_DELAY) != pdPASS) {
         return USBH_FAIL;
     }
@@ -87,6 +108,9 @@ USBH_StatusTypeDef usbh_msc_submit_request(UsbhMscRequest *request) {
     // we don't have any io scheduler, but if only tasks with the same priority send
     // their requests, they will be distributed fairly
     debug_assert(((DWORD)request->data & 3) == 0);
+    if (!is_request_allowed()) {
+        return USBH_FAIL;
+    }
     if (xQueueSend(request_queue, &request, portMAX_DELAY) != pdPASS) {
         return USBH_FAIL;
     }

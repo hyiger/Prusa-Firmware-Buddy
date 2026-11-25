@@ -231,6 +231,45 @@ TEST_CASE("pressure_advance_calibration::plan_pattern", "[pressure_advance_calib
     }
 }
 
+TEST_CASE("pressure_advance_calibration::plan_cycles", "[pressure_advance_calibration]") {
+    const auto params = [](float fast_feedrate) {
+        return PatternParams {
+            .slow_feedrate = fast_feedrate / 10,
+            .fast_feedrate = fast_feedrate,
+            .acceleration = 120,
+            .smooth_time = 0.04f,
+            .cycles = 0,
+        };
+    };
+
+    SECTION("As many as fit in the filament a step may take") {
+        const float fast_feedrate = GENERATE(2.0f, 3.5f, 5.0f);
+        const float length = GENERATE(6.0f, 9.0f, 14.0f);
+        CAPTURE(fast_feedrate, length);
+
+        const uint8_t cycles = plan_cycles(params(fast_feedrate), length, 1, 100);
+        REQUIRE(cycles >= 1);
+
+        auto with_cycles = params(fast_feedrate);
+        with_cycles.cycles = cycles;
+        CHECK(plan_pattern(with_cycles).total_length() <= length);
+        with_cycles.cycles = cycles + 1;
+        CHECK(plan_pattern(with_cycles).total_length() > length);
+    }
+
+    SECTION("Fewer the faster the flow") {
+        CHECK(plan_cycles(params(2), 8, 1, 100) > plan_cycles(params(4), 8, 1, 100));
+        CHECK(plan_cycles(params(4), 8, 1, 100) > plan_cycles(params(8), 8, 1, 100));
+    }
+
+    SECTION("Kept within the limits") {
+        CHECK(plan_cycles(params(8), 8, 4, 8) == 4);
+        CHECK(plan_cycles(params(1), 8, 4, 8) == 8);
+        // Not even the lead-in fits
+        CHECK(plan_cycles(params(8), 0.1f, 4, 8) == 4);
+    }
+}
+
 TEST_CASE("pressure_advance_calibration::StepResponseAnalyzer lag", "[pressure_advance_calibration]") {
     Simulation simulation;
     simulation.force_noise = 0;

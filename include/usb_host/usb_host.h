@@ -3,6 +3,8 @@
 
 #ifdef __cplusplus
 
+    #include <option/has_usb_drive_format.h>
+
 namespace usb_host {
 
 /// \returns whether there is a USB drive inserted in the USB slot
@@ -13,6 +15,28 @@ bool is_media_inserted_since_startup();
 
 // In case media is invalid, this will disable it until reconnection
 void disable_media();
+
+    #if HAS_USB_DRIVE_FORMAT()
+/// \returns whether a drive is attached, be it one with a file system the printer cannot read
+bool is_drive_attached();
+
+enum class FormatResult {
+    /// Formatted, and the new file system mounts
+    formatted,
+    /// Too small for FAT32. Nothing was written to it.
+    too_small,
+    failed,
+};
+
+/// Erases the attached drive: makes a single FAT32 volume of all of it, or of its first 2 TiB on a
+/// larger one.
+///
+/// Blocks until done: seconds on a small drive, minutes on a very large one. The access of other tasks
+/// to the drive fails meanwhile and the files they have open on it are lost, so call it when nothing
+/// uses the drive. A format that fails after its first write leaves the drive with no file system,
+/// unless all that failed is the mount of the finished one.
+FormatResult format_drive();
+    #endif
 } // namespace usb_host
 
 namespace usbh_power_cycle {
