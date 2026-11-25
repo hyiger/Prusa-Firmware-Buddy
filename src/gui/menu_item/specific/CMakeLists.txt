@@ -21,3 +21,7 @@ endif()
 if(HAS_PRESSURE_ADVANCE_CALIBRATION)
   target_sources(firmware PRIVATE menu_items_pressure_advance_calibration.cpp)
 endif()
+
+if(HAS_AUX_CHAMBER_LIGHT)
+  target_sources(firmware PRIVATE menu_items_aux_chamber_light.cpp)
+endif()
