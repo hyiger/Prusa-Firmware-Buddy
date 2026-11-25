@@ -193,6 +193,7 @@ jobs:
           It is Prusa's official [${BASE_VERSION}](https://github.com/prusa3d/Prusa-Firmware-Buddy/releases/tag/v${BASE_VERSION}) with these additions:
 
           - **Filament slots**: each tool records the vendor and color of its filament, picked while loading the way an AMS does it. PrusaSlicer Filament Edition reads them over PrusaLink.
+          - **Autoload into any tool**: pushing filament into the sensor of an empty tool loads that tool, picking it up from its dock. Not yet verified on hardware.
           - **Prusa Connect**: the printer reports the plain version to Connect, so uploads work.
           - **Nozzle temperature**: INDX tools take targets up to 300 °C, where stock ${BASE_VERSION} stops at 290 °C. Not yet verified on hardware.
           - **Automatic pressure advance, Core One INDX only**: the printer can measure the pressure advance of each tool with the load cell at the start of a print and use it in place of the one from the filament profile. Off by default. Tried on one printer with one filament so far, where it came out at, or somewhat under, what printed line tests looked best with.
@@ -212,6 +213,14 @@ jobs:
           There are 16 preset vendors, listed with Generic first and the rest alphabetically (Generic, 3D-Fuel, Bambu Lab, colorFabb, Elegoo, eSun, Fiberlogy, Fillamentum, Hatchbox, Inland, Overture, Polymaker, Prusament, Siraya Tech, Spectrum, Sunlu), and 16 preset colors (Red, Green, Blue, Cyan, Magenta, Yellow, Black, White, Orange, Brown, Gray, Purple, Pink, Silver, Natural, Gold), plus 8 user slots for each. Orange is the orange of the printer's own interface, #F8651B, as web orange looks yellow on its display. Filament > Manage Filaments has Edit Vendors and Edit Colors to name the user slots and set the hex code of a user color, and Enable Vendors and Enable Colors to choose which entries the lists show.
 
           PrusaLink reports the slots at `/api/v1/tools`, with the same credentials as its other requests, and `M866 T<tool> V"<vendor>" C"<color>"` sets them from G-code. PrusaSlicer Filament Edition 1.16.0 and later read them with Sync Filaments from Printer, which works only over PrusaLink, not over Prusa Connect. Setup steps with screenshots are in the [Filament Slots and Sync user guide](https://github.com/hyiger/PrusaSlicer/wiki/Filament-Slots-and-Sync).
+
+          ### Autoload into any tool
+
+          Stock ${BASE_VERSION} autoloads filament only into the tool on the head, and the INDX docks its tool after every print and every load, so autoload hardly ever happened. In this build, pushing filament into the side filament sensor of a tool loads that tool when the printer has it as empty, that is with no filament type, as after an unload. The printer first asks for the filament type, and, as Ask Color On Load says, its vendor and color as described under Filament slots, before anything moves. Return there, or pulling the filament back out, leaves everything as it was. It then picks up the tool, docking the one on the head first if there is one, loads it the same way as Filament > Load, and docks it again.
+
+          Settings > Hardware > Filament Autoloading turns it on and off together with the stock autoload, and it is on by default. Nothing happens while a print runs or its preview is open, while another command is running, or for a tool that the printer has as loaded. A tool whose filament was pulled out by hand without an unload still counts as loaded, so unload it from the Filament menu first. Filament pushed into the sensor of the tool on the head starts the stock autoload, as before.
+
+          This has not been tested on a printer yet.
 
           ### Prusa Connect
 
