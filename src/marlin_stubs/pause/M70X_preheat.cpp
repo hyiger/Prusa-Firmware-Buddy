@@ -30,6 +30,7 @@
 #include <option/has_anfc.h>
 #include <bsod/bsod.h>
 #include <option/has_filament_slots.h>
+#include <option/has_indx.h>
 #if HAS_FILAMENT_SLOTS()
     #include <filament_library.hpp>
 #endif
@@ -104,8 +105,20 @@ static FSMResponseVariant determine_filament_for_operation(const filament_gcodes
 
     marlin_server::FSM_Holder fsm { ClientFSM::Preheat };
 
+    // The filament for an autoload has been pulled back out
+    const auto autoload_filament_gone = [&] {
+#if HAS_INDX()
+        // Each tool has its own sensor, and the tool to load is usually in its dock
+        if (const auto tool = stdext::get_optional<VirtualToolIndex>(preheat_data.tool)) {
+            const IFSensor *side_fs = GetSideFSensor(tool->to_physical());
+            return side_fs && side_fs->get_state() == FilamentSensorState::NoFilament;
+        }
+#endif
+        return FSensors_instance().sensor_state(LogicalFilamentSensor::primary_runout) == FilamentSensorState::NoFilament;
+    };
+
     const auto check_early_exit = [&] -> std::optional<FSMResponseVariant> {
-        if (preheat_data.mode == PreheatMode::autoload && FSensors_instance().sensor_state(LogicalFilamentSensor::primary_runout) == FilamentSensorState::NoFilament) {
+        if (preheat_data.mode == PreheatMode::autoload && autoload_filament_gone()) {
             return FSMResponseVariant::make(Response::Abort);
         }
 

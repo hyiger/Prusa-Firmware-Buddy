@@ -38,6 +38,12 @@
     #include <feature/openprinttag/tool_tag.hpp>
 #endif
 
+#include <option/has_indx.h>
+#if HAS_INDX()
+    #include <config_store/store_instance.hpp>
+    #include <filament.hpp>
+#endif
+
 LOG_COMPONENT_DEF(FSensor, logging::Severity::info);
 
 using namespace MMU2;
@@ -291,6 +297,45 @@ void FilamentSensors::process_events() {
         return true;
     };
 
+#if HAS_INDX()
+    // Each INDX tool has its own side sensor, and the tool is usually in its dock, where the logical
+    // sensors don't see it. Filament pushed into the sensor of an empty tool other than the picked
+    // one loads that tool; M1701 picks it up and docks it again.
+    const auto check_slot_autoload = [&]() {
+        if (autoload_sent
+            || marlin_server::is_processing()
+            || marlin_server::print_preview()
+            || isAutoloadLocked()
+            || !config_store().fs_autoload_enabled.get()) {
+            return false;
+        }
+
+        for (const auto tool : PhysicalToolIndex::all().skip_all_disabled()) {
+            if (tool.to_raw() == tool_index) {
+                continue; // The picked tool gets the stock autoload
+            }
+
+            const IFSensor *side_fs = GetSideFSensor(tool);
+            if (!side_fs || side_fs->last_event() != IFSensor::Event::filament_inserted) {
+                continue;
+            }
+
+            const auto virtual_tool = stdext::get_optional<VirtualToolIndex>(tool.currently_selected_virtual_tool());
+            if (!virtual_tool.has_value() || FilamentType::for_tool(*virtual_tool) != FilamentType::none) {
+                continue;
+            }
+
+            autoload_sent = true;
+            // P: T is a printer tool. The print's tool mapping is still active on its Finished screen.
+            marlin_server::inject(GCodeLiteral { .gcode = "M1701 P T%.0f", .parameter = static_cast<float>(tool.to_raw()) });
+            log_info(FSensor, "Injected autoload into tool %u", tool.display_index());
+            return true;
+        }
+
+        return false;
+    };
+#endif
+
     if (marlin_server::is_printing()) {
         if (check_runout(LogicalFilamentSensor::primary_runout)) {
             return;
@@ -314,6 +359,12 @@ void FilamentSensors::process_events() {
         if (check_autoload()) {
             return;
         }
+
+#if HAS_INDX()
+        if (check_slot_autoload()) {
+            return;
+        }
+#endif
     }
 }
 
