@@ -38,6 +38,12 @@
     #include <feature/openprinttag/tool_tag.hpp>
 #endif
 
+#include <option/has_indx.h>
+#if HAS_INDX()
+    #include <config_store/store_instance.hpp>
+    #include <filament.hpp>
+#endif
+
 LOG_COMPONENT_DEF(FSensor, logging::Severity::info);
 
 using namespace MMU2;
@@ -122,10 +128,10 @@ void FilamentSensors::step() {
     const bool new_state = marlin_vars().peek_fsm_states([](const auto &states) { return states.is_active(ClientFSM::Load_unload); });
 
     if (old_state && !new_state) {
-        FSensors_instance().DecEvLock(); // ClientFSM::Load_unload destroy
+        FSensors_instance().DecLoadEvLock(); // ClientFSM::Load_unload destroy
     }
     if (!old_state && new_state) {
-        FSensors_instance().IncEvLock(); // ClientFSM::Load_unload create
+        FSensors_instance().IncLoadEvLock(); // ClientFSM::Load_unload create
     }
 
     old_state = new_state;
@@ -207,6 +213,11 @@ void FilamentSensors::reconfigure_sensors_if_needed(bool force) {
 }
 
 void FilamentSensors::process_events() {
+#if HAS_INDX()
+    // Ahead of the event lock, which an autoload holds while it loads
+    track_slot_autoload_requests();
+#endif
+
     if (isEvLocked()) {
         return;
     }
@@ -314,8 +325,96 @@ void FilamentSensors::process_events() {
         if (check_autoload()) {
             return;
         }
+
+#if HAS_INDX()
+        if (check_slot_autoload()) {
+            return;
+        }
+#endif
     }
 }
+
+#if HAS_INDX()
+// Each INDX tool has its own side sensor, and the tool is usually in its dock, where the logical
+// sensors don't see it. Filament pushed into the sensor of an empty tool other than the picked one
+// loads that tool; M1701 picks it up and docks it again. Filament pushed in while an autoload runs
+// loads once it is done, so several tools can be filled in a row.
+void FilamentSensors::track_slot_autoload_requests() {
+    if (marlin_server::is_printing() || marlin_server::print_preview() || isAutoloadLocked()) {
+        slot_autoload_pending.reset();
+        return;
+    }
+
+    // A load or unload, an autoload's own included, holds the event lock. Its other holders, such as
+    // sensor calibration, want the filament for themselves.
+    const bool can_note = event_lock <= load_event_lock;
+
+    for (const auto tool : PhysicalToolIndex::all().skip_all_disabled()) {
+        const IFSensor *side_fs = GetSideFSensor(tool);
+        if (!side_fs) {
+            continue;
+        }
+
+        if (tool.to_raw() == tool_index) {
+            slot_autoload_pending.reset(tool.to_raw()); // The picked tool gets the stock autoload
+            continue;
+        }
+
+        switch (side_fs->last_event()) {
+        case IFSensor::Event::filament_inserted:
+            if (can_note) {
+                slot_autoload_pending.set(tool.to_raw());
+            }
+            break;
+        case IFSensor::Event::filament_removed:
+            slot_autoload_pending.reset(tool.to_raw());
+            break;
+        case IFSensor::Event::no_event:
+            break;
+        }
+    }
+}
+
+bool FilamentSensors::check_slot_autoload() {
+    if (slot_autoload_pending.none()
+        || autoload_sent
+        || marlin_server::is_processing()
+        || marlin_server::print_preview()
+        || isAutoloadLocked()) {
+        return false;
+    }
+
+    if (!config_store().fs_autoload_enabled.get()) {
+        slot_autoload_pending.reset();
+        return false;
+    }
+
+    for (const auto tool : PhysicalToolIndex::all().skip_all_disabled()) {
+        if (!slot_autoload_pending.test(tool.to_raw())) {
+            continue;
+        }
+        slot_autoload_pending.reset(tool.to_raw());
+
+        const IFSensor *side_fs = GetSideFSensor(tool);
+        if (!side_fs || side_fs->get_state() != FilamentSensorState::HasFilament) {
+            continue;
+        }
+
+        const auto virtual_tool = stdext::get_optional<VirtualToolIndex>(tool.currently_selected_virtual_tool());
+        if (!virtual_tool.has_value() || FilamentType::for_tool(*virtual_tool) != FilamentType::none) {
+            continue;
+        }
+
+        autoload_sent = true;
+        // P: T is a printer tool. The print's tool mapping is still active on its Finished screen.
+        marlin_server::inject(GCodeLiteral { .gcode = "M1701 P T%.0f", .parameter = static_cast<float>(virtual_tool->to_raw()) });
+        log_info(FSensor, "Injected autoload into tool %u", tool.display_index());
+        return true;
+    }
+
+    return false;
+}
+#endif
 
 void FilamentSensors::process_enable_state_update() {
     enable_state_update_processing = true;
@@ -344,6 +443,19 @@ void FilamentSensors::IncEvLock() {
     if ((event_lock++) == std::numeric_limits<decltype(autoload_lock)::value_type>::max()) {
         bsod("Filament sensor event lock overflow");
     }
+}
+
+void FilamentSensors::DecLoadEvLock() {
+    DecEvLock();
+    if ((load_event_lock--) == 0) {
+        bsod("Filament sensor load event underflow");
+    }
+}
+void FilamentSensors::IncLoadEvLock() {
+    if ((load_event_lock++) == std::numeric_limits<decltype(load_event_lock)::value_type>::max()) {
+        bsod("Filament sensor load event lock overflow");
+    }
+    IncEvLock();
 }
 
 void FilamentSensors::DecAutoloadLock() {

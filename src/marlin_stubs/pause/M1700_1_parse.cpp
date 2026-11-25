@@ -8,6 +8,7 @@
 #include <filament_to_load.hpp>
 #include <option/has_bowden.h>
 #include <option/has_indx.h>
+#include "../../../lib/Marlin/Marlin/src/feature/pause.h"
 
 #include <option/has_toolchanger.h>
 #if HAS_TOOLCHANGER()
@@ -85,12 +86,14 @@ void PrusaGcodeSuite::M1700() {
  *
  *#### Usage
  *
- *    M1701 [ T ]
+ *    M1701 [ T | P ]
  *
  *#### Parameters
  *
  * - `T` - Extruder number. Required for mixing extruder.
  *        For non-mixing, current extruder if omitted.
+ *        INDX: a tool that is not picked is picked up for the load and docked again.
+ * - `P` - `T` is a printer tool; the print's tool mapping does not apply
  * - `G` - Use filament data from an OpenPrintTag with the specific UID hash (internal parameter)
  *
  * Default values are used for omitted arguments.
@@ -106,14 +109,18 @@ void PrusaGcodeSuite::M1701() {
     //   of MMU printer, there's single filament sensor, but 5 slots), which would
     //   suggest physical.
     // * We do _not_ set the T parameter on trigger, and trigger it only in case we
-    //   have the specific head selected (on XL), ignoring for others.
+    //   have the specific head selected (on XL), ignoring for others. INDX is the
+    //   exception: a sensor of a tool that is not picked sets T, and that tool is
+    //   picked up for the load.
     // * We use the parameter for things like filament properties, which filament
     //   to load, etc, which suggest virtual.
     // * We take a physical tool to load into by independently using
     //   PhysicalToolIndex::currently_selected, which seems completely wrong in
     //   principle.
-    const std::optional<VirtualToolIndex> virtual_tool = stdext::get_optional<VirtualToolIndex>(GcodeSuite::get_target_virtual_from_command());
+    const std::optional<VirtualToolIndex> virtual_tool = stdext::get_optional<VirtualToolIndex>(GcodeSuite::get_target_virtual_from_command_p());
     if (!virtual_tool.has_value()) {
+        // Otherwise an injected autoload would keep blocking the next one
+        FSensors_instance().ClrAutoloadSent();
         return;
     }
 
@@ -148,6 +155,45 @@ void PrusaGcodeSuite::M1701() {
     }
 
 #if HAS_INDX()
+    // The steps below act on the picked tool. A load picks up the target first, docking the tool on
+    // the head if there is one, and docks the target again.
+    if (PhysicalToolIndex::currently_selected_opt() != virtual_tool->to_physical()) {
+        const PhysicalToolIndex physical_tool = virtual_tool->to_physical();
+
+        // A tool left without filament gets back the target it had: a failed pick leaves it
+        // preheated, a failed load turns it off
+        ScopeGuard restore_temp = [&, orig_temp = Temperature::degTargetHotend(physical_tool)] {
+            if (FilamentType::for_tool(*virtual_tool) == FilamentType::none) {
+                thermalManager.setTargetHotend(orig_temp, physical_tool);
+            }
+        };
+
+        // Ask for the filament before anything moves
+        const FilamentSelectionArgs data {
+            .mode = PreheatMode::autoload,
+            .tool = *virtual_tool,
+            .ret_cool = RetAndCool_t::Return,
+        };
+        const auto [canceled, filament] = preheat(data, PreheatBehavior::for_filament_load());
+        if (canceled) {
+            M70X_process_user_response(*canceled, *virtual_tool);
+            return;
+        }
+
+        // A pick onto an empty head doesn't lift Z; Filament > Load lifts the same way first
+        GcodeSuite::process_subcommands_now_P("G27 P0 Z5");
+
+        M701_load(M701LoadArgs {
+            .filament_to_be_loaded = filament,
+            // The target's own length, like Filament > Load; the default would be the picked tool's
+            .fast_load_length = fc_settings[*virtual_tool].load_length,
+            .z_min_pos = z_min_pos,
+            .op_preheat = RetAndCool_t::Return,
+            .virtual_tool = *virtual_tool,
+        });
+        return;
+    }
+
     // Park the tool back to its dock after autoload (covers all early-return paths)
     ScopeGuard park_after_autoload = [&] {
         tool_change(NoTool {}, tool_return_t::dock_backoff);

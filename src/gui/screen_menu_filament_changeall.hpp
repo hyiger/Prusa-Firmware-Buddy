@@ -12,6 +12,7 @@
 #include <multi_filament_change.hpp>
 #include <gui/menu_item/menu_item_select_menu.hpp>
 #include <utils/compact_optional.hpp>
+#include <fs_autoload_autolock.hpp>
 
 class ScreenChangeAllFilaments;
 
@@ -119,4 +120,8 @@ public:
 
     struct SetupLoadAll {};
     ScreenChangeAllFilaments(SetupLoadAll);
+
+private:
+    /// An autoload would load a tool behind the plan's back, and the plan would then change it again
+    FS_AutoloadAutolock autoload_lock;
 };

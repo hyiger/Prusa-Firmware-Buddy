@@ -48,7 +48,7 @@ public:
     static bool Active() { return lock > 0; }
 
 private:
-    FS_EventAutolock fs_lock;
+    FS_LoadEventAutolock fs_lock;
     BlockEStallDetection estall_lock;
 };
 
