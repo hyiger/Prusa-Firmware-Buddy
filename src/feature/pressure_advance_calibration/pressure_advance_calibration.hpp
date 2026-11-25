@@ -30,7 +30,7 @@ struct Request {
     /// suits prints that go about this fast.
     float feedrate;
 
-    /// [mm/s of filament] Feedrate the extrusion drops to in between, a tenth of the fast one if not given
+    /// [mm/s of filament] Feedrate the extrusion drops to in between, a tenth of the fast one, but 0.2 at the least, if not given
     std::optional<float> slow_feedrate = std::nullopt;
 
     /// How many times the extrusion goes fast with each pressure advance tried.

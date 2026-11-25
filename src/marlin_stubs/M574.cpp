@@ -40,7 +40,7 @@
  * - `F` - Filament feedrate of the fastest flow of the print [mm/s], which the fast extrusion is done at.
  *         Required. Unlike in a move, this is not mm/min. Limited to 1-8 mm/s.
  * - `V` - Accepted and ignored. Slicers send it and what it stands for has not been published.
- * - `L` - Filament feedrate of the slow extrusion [mm/s] (defaults to a tenth of the fast one)
+ * - `L` - Filament feedrate of the slow extrusion [mm/s] (defaults to a tenth of the fast one, but 0.2 at the least)
  * - `C` - How many times the extrusion goes fast with each pressure advance tried (2-8, defaults to
  *         as many as fit into 8 mm of filament, but 4 at the least)
  * - `N` - How many pressure advance values are tried (3-8, defaults to 4)
