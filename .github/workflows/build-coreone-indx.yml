@@ -196,6 +196,7 @@ jobs:
           - **Prusa Connect**: the printer reports the plain version to Connect, so uploads work.
           - **Nozzle temperature**: INDX tools take targets up to 300 °C, where stock ${BASE_VERSION} stops at 290 °C. Not yet verified on hardware.
           - **Automatic pressure advance, Core One INDX only**: the printer can measure the pressure advance of each tool with the load cell at the start of a print and use it in place of the one from the filament profile. Off by default. Tried on one printer with one filament so far, where it came out at, or somewhat under, what printed line tests looked best with.
+          - **Aux chamber light**: Settings > Lights has a switch for an LED strip wired to the GPIO board's first open-drain output. Not yet verified on hardware.
 
           The printer shows its version as `${VERSION}`, so it can be told apart from Prusa's build. Prusa Connect is the exception, see below.
 
@@ -238,6 +239,12 @@ jobs:
           Each step of a measurement is logged: the pressure advance tried and how far the force then lags behind the flow, as a whole and separately for the flow going up and going down. Settings > System > Save Logs To File puts the log on the USB drive, which is the easiest way to get it. With `D`, `M574` also logs the course of the force around the flow changes, and with `P` and `Q` it tries values spread evenly between the two instead of closing in on the result, which shows how the force responds to pressure advance values it would otherwise not try. A calibration that fails says why, on the screen and in the reply to `M574 ... I`. The steps and the result are also sent as the `pa_calib_step` and `pa_calib` metrics, and with the `pa_calib_sample` and `pa_calib_pattern` metrics turned on by `M331`, so is every load cell sample a measurement is made from.
 
           This is new and has been tried on one printer, with one filament and one nozzle, so treat what it comes up with as a suggestion. The load cell signal turned out to be strong, and measuring the same thing again gives the same value to within a few percent. The nozzle needs less pressure advance the faster the filament flows, and the hotter it is. Printed line tests at two temperatures looked best with the value of a slow flow, even though they were printed fast, and clearly worse with the value measured at the flow they were printed at. So the calibration measures at a slow flow, 2 mm/s of filament at the most, whatever flow the slicer asks for. Whether that holds for other filaments, nozzles and layer heights is not known yet. One thing is known to be off: a measurement taken right after the nozzle has reached its temperature, which is when a print takes it, came out 10 to 15 % lower than the same one taken a minute later, and it was the later one that matched the line tests. So expect the value a print ends up with to be on the low side. Compare what `M574 ... I` comes up with to a printed test of your own before leaving the setting on for prints that matter.
+
+          ### Aux chamber light
+
+          Settings > Lights, also reachable from Tune during a print, has an Aux Chamber Light switch for an LED strip wired to the first open-drain output of the GPIO board, which is pin 0 of the board's IO expander. The switch sends `M262 P0 B0` and then `M264 P0 B1` or `M264 P0 B0`, the commands start and end G-code can use for the same strip, and it follows what such G-code sets. During a print the switch spins until the printer gets to the command, after the one it is running. The printer keeps the state across restarts. The switch is hidden when the GPIO board does not answer at startup.
+
+          This has not been tested on a printer yet.
 
           ### Flashing
 
