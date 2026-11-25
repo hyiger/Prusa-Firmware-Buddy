@@ -8,6 +8,7 @@
 #include <window_msgbox.hpp>
 #include <option/has_toolchanger.h>
 #include <window_dlg_wait.hpp>
+#include <fs_autoload_autolock.hpp>
 
 #if HAS_TOOLCHANGER()
     #include "module/prusa/toolchanger.h"
@@ -38,6 +39,9 @@ expands_t multi_tool_expands() {
 } // namespace
 
 #if HAS_TOOLCHANGER()
+/// Hold the autoload lock around this and the rest of the menu action. An autoload can't open its
+/// screens over these dialogs, so the wait here would wait for it forever, and it would dock the
+/// tool picked here.
 [[nodiscard]] bool show_tool_selector_dialog(const SelectToolDialogArgs &args) {
     const auto tool = select_tool_dialog(args);
 
@@ -73,6 +77,7 @@ MI_LOAD::MI_LOAD()
 
 void MI_LOAD::click(IWindowMenu &) {
 #if HAS_TOOLCHANGER()
+    FS_AutoloadAutolock autoload_lock;
     if (!show_tool_selector_dialog({
             .allow_return = true,
         })) {
@@ -94,6 +99,7 @@ MI_UNLOAD::MI_UNLOAD()
 
 void MI_UNLOAD::click(IWindowMenu &) {
 #if HAS_TOOLCHANGER()
+    FS_AutoloadAutolock autoload_lock;
     if (!show_tool_selector_dialog({
             .allow_return = true,
         })) {
@@ -111,6 +117,7 @@ MI_CHANGE::MI_CHANGE()
 
 void MI_CHANGE::click(IWindowMenu &) {
 #if HAS_TOOLCHANGER()
+    FS_AutoloadAutolock autoload_lock;
     if (!show_tool_selector_dialog({
             .allow_return = true,
             .tool_filter = tool_has_filament,
@@ -158,6 +165,7 @@ MI_PURGE::MI_PURGE()
 
 void MI_PURGE::click(IWindowMenu &) {
 #if HAS_TOOLCHANGER()
+    FS_AutoloadAutolock autoload_lock;
     if (!show_tool_selector_dialog({
             .allow_return = true,
             .tool_filter = tool_has_filament,

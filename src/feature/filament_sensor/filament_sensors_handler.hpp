@@ -14,6 +14,7 @@
 #include <bitset>
 #include "config_features.h"
 #include <tool_index.hpp>
+#include <option/has_indx.h>
 
 #include <inplace_function.hpp>
 
@@ -53,6 +54,11 @@ public:
 
     void DecEvLock();
     void IncEvLock();
+
+    /// The event lock, held by a filament load or unload rather than by something that wants the
+    /// filament for itself, such as sensor calibration
+    void DecLoadEvLock();
+    void IncLoadEvLock();
 
     void DecAutoloadLock();
     void IncAutoloadLock();
@@ -108,6 +114,17 @@ private:
     inline bool isEvLocked() const { return event_lock > 0; }
     inline bool isAutoloadLocked() const { return autoload_lock > 0; }
 
+#if HAS_INDX()
+    /// Notes filament pushed into the sensor of a tool that is not picked
+    void track_slot_autoload_requests();
+
+    /// Loads one noted tool, if it is empty and its sensor still has filament
+    bool check_slot_autoload();
+
+    /// Tools whose sensor got filament that no autoload has acted on yet
+    std::bitset<PhysicalToolIndex::count> slot_autoload_pending;
+#endif
+
     // logical sensors
     // 1 physical sensor can be linked to multiple logical sensors
     LogicalFilamentSensors logical_sensors_;
@@ -119,6 +136,7 @@ private:
     // in case multiple values are needed they should be read during critical section too
     std::atomic<uint8_t> event_lock; // 0 == unlocked
     std::atomic<uint8_t> autoload_lock; // 0 == unlocked
+    std::atomic<uint8_t> load_event_lock = 0; // The part of event_lock held by loads and unloads
 
     /// If set, the fsensors enable/disable states
     /// will be reconfigured in the next fsensors update cycle

@@ -17,3 +17,12 @@ public:
     inline FS_EventAutolock() { FSensors_instance().IncEvLock(); }
     inline ~FS_EventAutolock() { FSensors_instance().DecEvLock(); }
 };
+
+/// The event lock of a filament load or unload, see FilamentSensors::IncLoadEvLock
+class FS_LoadEventAutolock {
+public:
+    FS_LoadEventAutolock(const FS_LoadEventAutolock &other) = delete;
+    FS_LoadEventAutolock(FS_LoadEventAutolock &&other) = delete;
+    inline FS_LoadEventAutolock() { FSensors_instance().IncLoadEvLock(); }
+    inline ~FS_LoadEventAutolock() { FSensors_instance().DecLoadEvLock(); }
+};

@@ -8,6 +8,7 @@
 #include <filament_to_load.hpp>
 #include <option/has_bowden.h>
 #include <option/has_indx.h>
+#include "../../../lib/Marlin/Marlin/src/feature/pause.h"
 
 #include <option/has_toolchanger.h>
 #if HAS_TOOLCHANGER()
@@ -184,7 +185,8 @@ void PrusaGcodeSuite::M1701() {
 
         M701_load(M701LoadArgs {
             .filament_to_be_loaded = filament,
-            .fast_load_length = fast_load_length,
+            // The target's own length, like Filament > Load; the default would be the picked tool's
+            .fast_load_length = fc_settings[*virtual_tool].load_length,
             .z_min_pos = z_min_pos,
             .op_preheat = RetAndCool_t::Return,
             .virtual_tool = *virtual_tool,
