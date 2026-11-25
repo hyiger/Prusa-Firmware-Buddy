@@ -88,7 +88,8 @@ bool format_drive() {
 
     // f_mkfs writes the partition table last. So that a format that does not get that far leaves no
     // file system behind, and not the previous one with a part of it overwritten, the old partition
-    // tables go first: all the sectors ahead of the new volume, which hold the MBR and a GPT.
+    // tables go first: all the sectors ahead of the new volume, which hold the MBR and the primary GPT.
+    // A backup GPT at the end of the drive stays. Without a protective MBR, computers ignore it.
     static constexpr LBA_t volume_start = 63;
     const UINT work_sectors = work_size / FF_MAX_SS;
     memset(work, 0, work_size);
