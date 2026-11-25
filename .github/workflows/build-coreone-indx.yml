@@ -198,6 +198,7 @@ jobs:
           - **Nozzle temperature**: INDX tools take targets up to 300 °C, where stock ${BASE_VERSION} stops at 290 °C. Not yet verified on hardware.
           - **Automatic pressure advance, Core One INDX only**: the printer can measure the pressure advance of each tool with the load cell at the start of a print and use it in place of the one from the filament profile. Off by default. Tried on one printer with three filaments so far, where it came out within about 30 % of what printed line tests of the same speed looked best with.
           - **Formatting the USB drive**: Settings > System > Format USB Drive erases the drive in the printer and makes it FAT32, the file system the printer reads. Not yet tried on a printer.
+          - **Aux chamber light**: Settings > Lights has a switch for an LED strip wired to the GPIO board's first open-drain output. Not yet verified on hardware.
 
           The printer shows its version as `${VERSION}`, so it can be told apart from Prusa's build. Prusa Connect is the exception, see below.
 
@@ -267,6 +268,12 @@ jobs:
           The printer refuses while it prints, while a file is being transferred and while Save Logs To File is on. A drive smaller than about 38 MB is too small for FAT32: the printer says so and leaves it as it is.
 
           This has been checked on a computer only, with the printer's own file system code formatting drive images from 40 MB to 1 TB that `fsck` then found no fault with, and being cut short after each of its writes in turn. It has not been run on a printer yet.
+
+          ### Aux chamber light
+
+          Settings > Lights, also reachable from Tune during a print, has an Aux Chamber Light switch for an LED strip wired to the first open-drain output of the GPIO board, which is pin 0 of the board's IO expander. The switch sends `M262 P0 B0` and then `M264 P0 B1` or `M264 P0 B0`, the commands start and end G-code can use for the same strip, and it follows what such G-code sets. During a print the switch spins until the printer gets to the command, after the one it is running. The printer keeps the state across restarts. The switch is hidden when the GPIO board does not answer at startup.
+
+          This has not been tested on a printer yet.
 
           ### Flashing
 
