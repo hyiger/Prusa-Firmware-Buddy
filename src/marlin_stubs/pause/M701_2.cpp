@@ -37,6 +37,21 @@ uint filament_gcodes::InProgress::lock = 0;
 
 using namespace filament_gcodes;
 
+/// Picks the tool to load or unload
+static bool pick_tool(VirtualToolIndex tool, Pause::LoadType load_type, const pause::Settings &settings) {
+    if (Pause::Instance().tool_change(tool, load_type, settings)) {
+        return true;
+    }
+
+#if HAS_INDX()
+    // Outside a print, the toolchanger leaves telling the user to its caller
+    if (!marlin_server::is_printing()) {
+        marlin_server::set_warning(WarningType::ToolNotPicked);
+    }
+#endif
+    return false;
+}
+
 /**
  * Shared code for load/unload filament
  */
@@ -109,7 +124,7 @@ void filament_gcodes::M701_load(const M701LoadArgs &args) {
     const xyze_pos_t current_position_tmp = current_position;
 
     // Pick the right tool
-    if (!Pause::Instance().tool_change(virtual_tool, Pause::LoadType::load, settings)) {
+    if (!pick_tool(virtual_tool, Pause::LoadType::load, settings)) {
         return;
     }
 
@@ -176,7 +191,7 @@ void filament_gcodes::M702_unload(std::optional<float> unload_length, float z_mi
     xyze_pos_t current_position_tmp = current_position;
 
     // Pick the right tool
-    if (!Pause::Instance().tool_change(virtual_tool, Pause::LoadType::unload, settings)) {
+    if (!pick_tool(virtual_tool, Pause::LoadType::unload, settings)) {
         return;
     }
 
@@ -286,7 +301,7 @@ void filament_gcodes::M1600_change_filament(FilamentType filament_to_be_loaded, 
     settings.SetRetractLength(0.f);
 
     // Pick the right tool
-    if (!Pause::Instance().tool_change(virtual_tool, Pause::LoadType::unload, settings)) {
+    if (!pick_tool(virtual_tool, Pause::LoadType::unload, settings)) {
         return;
     }
 

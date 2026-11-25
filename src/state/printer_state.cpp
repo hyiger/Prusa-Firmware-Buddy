@@ -657,6 +657,8 @@ ErrCode warning_type_to_error_code(WarningType wtype) {
 #if HAS_INDX()
     case WarningType::DockFanError:
         return ErrCode::CONNECT_DOCK_FAN_ERROR;
+    case WarningType::ToolNotPicked:
+        return ErrCode::ERR_MECHANICAL_TOOL_NOT_PICKED_RETRY;
 #endif
     case WarningType::HotendTempDiscrepancy:
         return ErrCode::CONNECT_HOTEND_TEMP_DISCREPANCY;

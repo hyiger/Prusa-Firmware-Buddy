@@ -46,6 +46,10 @@ enum class WarningType : uint32_t {
     HotendTempDiscrepancy,
     NozzleTimeout,
     FilamentLoadingTimeout,
+#if HAS_INDX()
+    /// A filament load outside a print could not pick up its tool
+    ToolNotPicked,
+#endif
 #if HAS_SIDE_FSENSOR()
     /// Load stopped because the extruder filament sensor is disabled or not calibrated
     ExtruderFSensorNotReady,
