@@ -55,6 +55,14 @@
 #include <wui.h>
 #include <power_panic.hpp>
 #include <logging/log_dest_file.hpp>
+#include <option/has_usb_drive_format.h>
+#if HAS_USB_DRIVE_FORMAT()
+    #include <async_job/async_job.hpp>
+    #include <transfers/changed_path.hpp>
+    #include <transfers/files.hpp>
+    #include <transfers/monitor.hpp>
+    #include <usb_host.h>
+#endif
 #include <numeric_input_config_common.hpp>
 #include <option/has_mmu2.h>
 #include <gui/menu_item/menu_item_utils.hpp>
@@ -1033,6 +1041,66 @@ void MI_LOG_TO_TXT::OnChange(size_t) {
     MsgBoxInfo(_("The printer will now save all logs to file until restart.\n\nLog file: %s").formatted(fmt_buf, filename), Responses_Ok);
     MsgBoxWarning(_("Turn the logging off before disconnecting the USB drive, or you risk damaging the filesystem!"), Responses_Ok);
 }
+
+#if HAS_USB_DRIVE_FORMAT()
+MI_FORMAT_USB_DRIVE::MI_FORMAT_USB_DRIVE()
+    : IWindowMenuItem(_("Format USB Drive"), nullptr, is_enabled_t::yes, is_hidden_t::no) {
+}
+
+void MI_FORMAT_USB_DRIVE::click(IWindowMenu & /*window_menu*/) {
+    // Formatting takes the file system from under whoever uses it
+    const auto is_refused = [] {
+        if (!marlin_client::is_idle() || transfers::Monitor::instance.status().has_value()) {
+            MsgBoxWarning(_("Not available while a print or a file transfer is in progress."), Responses_Ok);
+            return true;
+        }
+        if (logging::file_log_is_enabled()) {
+            MsgBoxWarning(_("Turn off Save Logs To File first."), Responses_Ok);
+            return true;
+        }
+        if (!usb_host::is_drive_attached()) {
+            MsgBoxWarning(_("Insert a USB drive first."), Responses_Ok);
+            return true;
+        }
+        return false;
+    };
+
+    if (is_refused()) {
+        return;
+    }
+    if (MsgBoxWarning(_("Format the USB drive as FAT32? All data on it will be erased."), Responses_YesNo, 1) != Response::Yes) {
+        return;
+    }
+    // A print or a transfer may have started while the question was on the screen
+    if (is_refused()) {
+        return;
+    }
+
+    AsyncJobWithResult<usb_host::FormatResult> job;
+    job.issue([](AsyncJobExecutionControl &, usb_host::FormatResult &result) {
+        result = usb_host::format_drive();
+    });
+    window_dlg_wait_t::wait_until(_("Formatting USB drive"), [&] { return !job.is_active(); });
+
+    const usb_host::FormatResult result = job.state() == AsyncJobBase::State::finished ? job.result() : usb_host::FormatResult::failed;
+    if (result != usb_host::FormatResult::too_small) {
+        // A format that failed may have erased the drive all the same.
+        // PrusaLink and Connect list the files anew only when told of a change.
+        transfers::ChangedPath::instance.changed_path(transfers::USB_MOUNT_POINT, transfers::ChangedPath::Type::Folder, transfers::ChangedPath::Incident::Combined);
+    }
+    switch (result) {
+    case usb_host::FormatResult::formatted:
+        MsgBoxInfo(_("USB drive formatted."), Responses_Ok);
+        break;
+    case usb_host::FormatResult::too_small:
+        MsgBoxError(_("The USB drive is too small for FAT32."), Responses_Ok);
+        break;
+    case usb_host::FormatResult::failed:
+        MsgBoxError(_("Formatting of the USB drive failed."), Responses_Ok);
+        break;
+    }
+}
+#endif
 
 #if HAS_AUTO_RETRACT()
 MI_PRE_NOZZLE_CLEANING_RETRACT::MI_PRE_NOZZLE_CLEANING_RETRACT()

@@ -565,6 +565,9 @@ set_feature_for_printers(
 
 set_feature_for_printers(HAS_EMBEDDED_ESP32 "XL")
 set_feature_for_printers_master_board(HAS_INTERNAL_STORAGE_FLASH "iX")
+
+# Formatting of the USB drive from the menu. Not on the other printers yet - untried there.
+set_feature_for_printers_master_board(HAS_USB_DRIVE_FORMAT "COREONE_INDX")
 set(PRINTERS_WITH_SIDE_LEDS "XL" "COREONE" "COREONE_INDX" "COREONEL" "COREONEL_INDX")
 set(PRINTERS_WITH_TRANSLATIONS
     "COREONE"

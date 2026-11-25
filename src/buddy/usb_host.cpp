@@ -9,6 +9,19 @@
 #include <atomic>
 #include "marlin_client.hpp"
 #include <bsod/bsod.h>
+#include <option/has_usb_drive_format.h>
+
+#if HAS_USB_DRIVE_FORMAT()
+    #include "usbh_async_diskio.hpp"
+    #include <heap.h>
+    #include <logging/log.hpp>
+    #include <raii/scope_guard.hpp>
+    #include <algorithm>
+    #include <cstdlib>
+    #include <cstring>
+
+LOG_COMPONENT_REF(USBHost);
+#endif
 
 USBH_HandleTypeDef hUsbHostHS;
 
@@ -29,6 +42,104 @@ bool is_media_inserted_since_startup() {
 void disable_media() {
     media_inserted = false;
 }
+
+#if HAS_USB_DRIVE_FORMAT()
+namespace {
+
+    /// Mounts the volume if it is not mounted.
+    FRESULT open_root_directory() {
+        DIR directory;
+        const FRESULT result = f_opendir(&directory, USBHPath);
+        if (result == FR_OK) {
+            f_closedir(&directory);
+        }
+        return result;
+    }
+
+    constexpr MKFS_PARM mkfs_parameters {
+        .fmt = FM_FAT32,
+        .n_fat = 2,
+        // 4 MiB, as on SD cards: flash memory writes clusters that start on its own block boundaries faster
+        .align = 8192,
+        .n_root = 0,
+        .au_size = 0,
+    };
+
+    /// [sectors, as the drive reports them to f_mkfs] FAT32 takes more than 65525 clusters, of a sector
+    /// at the least, and its data area starts at the alignment
+    constexpr DWORD min_drive_sectors = mkfs_parameters.align + 65526;
+
+} // namespace
+
+bool is_drive_attached() {
+    return !(disk_status(0) & STA_NOINIT);
+}
+
+FormatResult format_drive() {
+    if (!is_drive_attached()) {
+        return FormatResult::failed;
+    }
+
+    // f_mkfs turns down a drive too small for FAT32, but only once the old partition tables are gone
+    DWORD drive_sectors = 0;
+    if (disk_ioctl(0, GET_SECTOR_COUNT, &drive_sectors) != RES_OK) {
+        log_error(USBHost, "Formatting the drive failed: cannot read its size");
+        return FormatResult::failed;
+    }
+    if (drive_sectors < min_drive_sectors) {
+        log_error(USBHost, "The drive is too small for FAT32: %lu sectors", static_cast<unsigned long>(drive_sectors));
+        return FormatResult::too_small;
+    }
+
+    // The file allocation table, megabytes of it on a large drive, is written a buffer at a time.
+    size_t work_size = 16 * FF_MAX_SS;
+    void *work = nullptr;
+    while (!(work = malloc_fallible(work_size)) && work_size > FF_MAX_SS) {
+        work_size /= 2;
+    }
+    if (!work) {
+        log_error(USBHost, "No memory to format the drive");
+        return FormatResult::failed;
+    }
+    ScopeGuard free_work = [&] { free(work); };
+
+    usbh_msc_claim_drive();
+    ScopeGuard release_drive = [] { usbh_msc_release_drive(); };
+
+    // A file system call another task was in the middle of may still write. It holds the volume
+    // lock until it is over, and any call of ours waits for that lock.
+    (void)open_root_directory();
+
+    // f_mkfs writes the partition table last. So that a format that does not get that far leaves no
+    // file system behind, and not the previous one with a part of it overwritten, the old partition
+    // tables go first: all the sectors ahead of the new volume, which hold the MBR and the primary GPT.
+    // A backup GPT at the end of the drive stays. Without a protective MBR, computers ignore it.
+    static constexpr LBA_t volume_start = 63;
+    const UINT work_sectors = work_size / FF_MAX_SS;
+    memset(work, 0, work_size);
+    for (LBA_t sector = 0; sector < volume_start;) {
+        const UINT count = std::min<LBA_t>(work_sectors, volume_start - sector);
+        if (disk_write(0, static_cast<const BYTE *>(work), sector, count) != RES_OK) {
+            log_error(USBHost, "Formatting the drive failed: cannot write to it");
+            return FormatResult::failed;
+        }
+        sector += count;
+    }
+
+    FRESULT result = f_mkfs(USBHPath, &mkfs_parameters, work, work_size);
+    if (result == FR_OK) {
+        result = open_root_directory();
+    }
+    if (result != FR_OK) {
+        log_error(USBHost, "Formatting the drive failed: %d", static_cast<int>(result));
+        return FormatResult::failed;
+    }
+
+    // The drive may have been disabled for a file system the printer could not read
+    media_inserted = true;
+    return FormatResult::formatted;
+}
+#endif
 
 } // namespace usb_host
 

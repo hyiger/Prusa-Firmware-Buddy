@@ -21,9 +21,8 @@
  * between a slow and a fast extrusion there and the firmware looks for the pressure advance with
  * which the force on the nozzle changes exactly when the flow does. `M573 R` then puts the result to use.
  *
- * A nozzle needs the less pressure advance the faster the filament flows. Prints have turned out to look
- * best with the pressure advance of a slow flow, however fast they go themselves, so the measurement is
- * done no faster than `U`.
+ * A nozzle needs the less pressure advance the faster the filament flows, so `F` matters: the result
+ * suits prints that go about that fast, and is to be compared with a printed test of that speed.
  *
  * Nothing may touch the nozzle during the measurement, so it is not done at the purge position, which
  * is inside the silicone V-groove, but further along the lane of the nozzle cleaner.
@@ -32,19 +31,18 @@
  *
  *#### Usage
  *
- *    M574 [ S | T | F | V | U | L | C | N | Y | D | P | Q | I ]
+ *    M574 [ S | T | F | V | L | C | N | Y | D | P | Q | I ]
  *
  *#### Parameters
  *
  * - `S` - Tool to calibrate (defaults to the picked tool)
  * - `T` - Nozzle temperature to calibrate at [°C]. Required.
- * - `F` - Filament feedrate of the fastest flow of the print [mm/s]. Required.
- *         Unlike in a move, this is not mm/min.
- * - `U` - The fastest filament feedrate the measurement is done at [mm/s] (1-8, defaults to 2).
- *         An `F` above it is measured at this one, and one below 1 mm/s at that.
+ * - `F` - Filament feedrate of the fastest flow of the print [mm/s], which the fast extrusion is done at.
+ *         Required. Unlike in a move, this is not mm/min. Limited to 1-8 mm/s.
  * - `V` - Accepted and ignored. Slicers send it and what it stands for has not been published.
- * - `L` - Filament feedrate of the slow extrusion [mm/s] (defaults to a quarter of the fast one)
- * - `C` - How many times the extrusion goes fast with each pressure advance tried (2-8, defaults to 8)
+ * - `L` - Filament feedrate of the slow extrusion [mm/s] (defaults to a tenth of the fast one, but 0.2 at the least)
+ * - `C` - How many times the extrusion goes fast with each pressure advance tried (2-8, defaults to
+ *         as many as fit into 8 mm of filament, but 4 at the least)
  * - `N` - How many pressure advance values are tried (3-8, defaults to 4)
  * - `Y` - Where on the lane of the nozzle cleaner to measure, as the Y of a G750 move (76-93, defaults to 77).
  *         The purge position is at 87.
@@ -59,8 +57,8 @@
  *#### Examples
  *
  *    M574 S0 V35 T215 F1.6 ; calibrate tool 0 at 215 °C, at 1.6 mm/s of filament, once G427 gets to it
- *    M574 T215 F5 I        ; calibrate the picked tool right now, at 2 mm/s
- *    M574 T215 F5 U5 I     ; the same at 5 mm/s
+ *    M574 T215 F5 I        ; calibrate the picked tool right now, between 0.5 and 5 mm/s
+ *    M574 T215 F5 L1.25 I  ; the same between 1.25 and 5 mm/s
  *    M574 T215 F5 N8 P0.02 Q0.09 D I ; log the force response with 0.02, 0.03 ... 0.09 s of pressure advance
  */
 void PrusaGcodeSuite::M574() {
@@ -100,18 +98,21 @@ void PrusaGcodeSuite::M574() {
     };
 
     const auto slow_feedrate = p.option_expected<float>('L', 0.0f);
+    const auto cycles = p.option_expected<uint8_t>('C');
     const auto cleaner_y = p.option_expected<float>('Y', Request::min_cleaner_y, Request::max_cleaner_y);
     if (invalid(slow_feedrate)
+        || invalid(cycles)
         || invalid(cleaner_y)
         || invalid(p.store_option_if_present('D', request.log_response_curves))
-        || invalid(p.store_option_if_present('U', request.measured_feedrate_limit))
-        || invalid(p.store_option_if_present('C', request.cycles))
         || invalid(p.store_option_if_present('N', request.steps))
         || invalid(p.option_expected<uint8_t>('S'))) {
         return;
     }
     if (slow_feedrate) {
         request.slow_feedrate = *slow_feedrate;
+    }
+    if (cycles) {
+        request.cycles = *cycles;
     }
     if (cleaner_y) {
         request.cleaner_y = *cleaner_y;
