@@ -251,11 +251,11 @@ jobs:
 
           ### Formatting the USB drive
 
-          Settings > System > Format USB Drive erases the drive that is in the printer and makes a single FAT32 volume of all of it, after asking. That is the file system the printer reads, so it also takes a drive the printer turns down with "Unknown file system", such as one that came formatted as exFAT, and a drive above 32 GB, which Windows does not offer to format as FAT32.
+          Settings > System > Format USB Drive erases the drive that is in the printer and makes a single FAT32 volume of all of it, or of its first 2.2 TB on a larger drive, after asking. That is the file system the printer reads, so it also takes a drive the printer turns down with "Unknown file system", such as one that came formatted as exFAT, and a drive above 32 GB, which Windows does not offer to format as FAT32.
 
           It is a quick format: the file system is made anew and the old data is not overwritten. The printer writes about 8 MB for a 32 GB drive and 64 MB for a 256 GB one, over a USB port that passes 1 MB a second at the most, so count with ten seconds or so for the first and more than a minute for the second. The screen shows "Formatting USB drive" until it is done; leave the drive in until then. A format that is cut short, by a drive pulled out or one that stops taking writes, leaves the drive with no file system at all, never with the old one half overwritten: the printer then shows it as empty, says "Unknown file system" once something opens a file on it, and formatting it again puts it right.
 
-          The printer refuses while it prints, while a file is being transferred and while Save Logs To File is on. A drive of less than 40 MB is too small for FAT32 and fails.
+          The printer refuses while it prints, while a file is being transferred and while Save Logs To File is on. A drive smaller than about 38 MB is too small for FAT32: the printer says so and leaves it as it is.
 
           This has been checked on a computer only, with the printer's own file system code formatting drive images from 40 MB to 1 TB that `fsck` then found no fault with, and being cut short after each of its writes in turn. It has not been run on a printer yet.
 

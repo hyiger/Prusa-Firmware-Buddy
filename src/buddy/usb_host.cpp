@@ -56,15 +56,39 @@ namespace {
         return result;
     }
 
+    constexpr MKFS_PARM mkfs_parameters {
+        .fmt = FM_FAT32,
+        .n_fat = 2,
+        // 4 MiB, as on SD cards: flash memory writes clusters that start on its own block boundaries faster
+        .align = 8192,
+        .n_root = 0,
+        .au_size = 0,
+    };
+
+    /// [sectors, as the drive reports them to f_mkfs] FAT32 takes more than 65525 clusters, of a sector
+    /// at the least, and its data area starts at the alignment
+    constexpr DWORD min_drive_sectors = mkfs_parameters.align + 65526;
+
 } // namespace
 
 bool is_drive_attached() {
     return !(disk_status(0) & STA_NOINIT);
 }
 
-bool format_drive() {
+FormatResult format_drive() {
     if (!is_drive_attached()) {
-        return false;
+        return FormatResult::failed;
+    }
+
+    // f_mkfs turns down a drive too small for FAT32, but only once the old partition tables are gone
+    DWORD drive_sectors = 0;
+    if (disk_ioctl(0, GET_SECTOR_COUNT, &drive_sectors) != RES_OK) {
+        log_error(USBHost, "Formatting the drive failed: cannot read its size");
+        return FormatResult::failed;
+    }
+    if (drive_sectors < min_drive_sectors) {
+        log_error(USBHost, "The drive is too small for FAT32: %lu sectors", static_cast<unsigned long>(drive_sectors));
+        return FormatResult::too_small;
     }
 
     // The file allocation table, megabytes of it on a large drive, is written a buffer at a time.
@@ -75,7 +99,7 @@ bool format_drive() {
     }
     if (!work) {
         log_error(USBHost, "No memory to format the drive");
-        return false;
+        return FormatResult::failed;
     }
     ScopeGuard free_work = [&] { free(work); };
 
@@ -97,31 +121,23 @@ bool format_drive() {
         const UINT count = std::min<LBA_t>(work_sectors, volume_start - sector);
         if (disk_write(0, static_cast<const BYTE *>(work), sector, count) != RES_OK) {
             log_error(USBHost, "Formatting the drive failed: cannot write to it");
-            return false;
+            return FormatResult::failed;
         }
         sector += count;
     }
 
-    static constexpr MKFS_PARM parameters {
-        .fmt = FM_FAT32,
-        .n_fat = 2,
-        // 4 MiB, as on SD cards: flash memory writes clusters that start on its own block boundaries faster
-        .align = 8192,
-        .n_root = 0,
-        .au_size = 0,
-    };
-    FRESULT result = f_mkfs(USBHPath, &parameters, work, work_size);
+    FRESULT result = f_mkfs(USBHPath, &mkfs_parameters, work, work_size);
     if (result == FR_OK) {
         result = open_root_directory();
     }
     if (result != FR_OK) {
         log_error(USBHost, "Formatting the drive failed: %d", static_cast<int>(result));
-        return false;
+        return FormatResult::failed;
     }
 
     // The drive may have been disabled for a file system the printer could not read
     media_inserted = true;
-    return true;
+    return FormatResult::formatted;
 }
 #endif
 

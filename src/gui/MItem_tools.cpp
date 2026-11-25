@@ -1076,22 +1076,28 @@ void MI_FORMAT_USB_DRIVE::click(IWindowMenu & /*window_menu*/) {
         return;
     }
 
-    AsyncJobWithResult<bool> job;
-    job.issue([](AsyncJobExecutionControl &, bool &result) {
+    AsyncJobWithResult<usb_host::FormatResult> job;
+    job.issue([](AsyncJobExecutionControl &, usb_host::FormatResult &result) {
         result = usb_host::format_drive();
     });
     window_dlg_wait_t::wait_until(_("Formatting USB drive"), [&] { return !job.is_active(); });
 
-    const bool finished = job.state() == AsyncJobBase::State::finished;
-    if (finished) {
+    const usb_host::FormatResult result = job.state() == AsyncJobBase::State::finished ? job.result() : usb_host::FormatResult::failed;
+    if (result != usb_host::FormatResult::too_small) {
         // A format that failed may have erased the drive all the same.
         // PrusaLink and Connect list the files anew only when told of a change.
         transfers::ChangedPath::instance.changed_path(transfers::USB_MOUNT_POINT, transfers::ChangedPath::Type::Folder, transfers::ChangedPath::Incident::Combined);
     }
-    if (finished && job.result()) {
+    switch (result) {
+    case usb_host::FormatResult::formatted:
         MsgBoxInfo(_("USB drive formatted."), Responses_Ok);
-    } else {
+        break;
+    case usb_host::FormatResult::too_small:
+        MsgBoxError(_("The USB drive is too small for FAT32."), Responses_Ok);
+        break;
+    case usb_host::FormatResult::failed:
         MsgBoxError(_("Formatting of the USB drive failed."), Responses_Ok);
+        break;
     }
 }
 #endif
