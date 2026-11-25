@@ -196,7 +196,7 @@ jobs:
           - **Autoload into any tool**: pushing filament into the sensor of an empty tool loads that tool, picking it up from its dock. Not yet verified on hardware.
           - **Prusa Connect**: the printer reports the plain version to Connect, so uploads work.
           - **Nozzle temperature**: INDX tools take targets up to 300 °C, where stock ${BASE_VERSION} stops at 290 °C. Not yet verified on hardware.
-          - **Automatic pressure advance, Core One INDX only**: the printer can measure the pressure advance of each tool with the load cell at the start of a print and use it in place of the one from the filament profile. Off by default. Tried on one printer with three filaments so far, where it came out within about 30 % of what printed line tests of the same speed looked best with.
+          - **Automatic pressure advance (experimental), Core One INDX only**: the printer can measure the pressure advance of each tool with the load cell at the start of a print and use it in place of the one from the filament profile. Off by default. **Experimental and not yet fully baked**: tried on one printer with three filaments so far, where it came out within about 30 % of what printed line tests of the same speed looked best with.
           - **Formatting the USB drive**: Settings > System > Format USB Drive erases the drive in the printer and makes it FAT32, the file system the printer reads. Not yet tried on a printer.
           - **Aux chamber light**: Settings > Lights has a switch for an LED strip wired to the GPIO board's first open-drain output. Not yet verified on hardware.
 
@@ -236,7 +236,9 @@ jobs:
 
           This has not been tested on a printer. Nobody has yet confirmed that a nozzle settles at 300 °C without overshooting into the MAXTEMP error, or checked the head's infrared temperature reading against a thermometer that high. Check this on your own printer before printing at 300 °C.
 
-          ### Automatic pressure advance
+          ### Automatic pressure advance (experimental)
+
+          **This is experimental and not yet fully baked.** Its results have been off by up to a third from what printed tests looked best with, it has been tried on one printer only, and how it measures has changed between releases and may change again. Leave Settings > Auto Pressure Advance off for prints that matter, unless you have checked what it measures against a printed test of your own.
 
           This is for the Core One INDX only. It measures in the wastebin and relies on the nozzle cleaner, so there is nothing of it in the firmware of printers with a Nextruder, and it is not turned on for the Core One L INDX, where it has not been tried.
 
