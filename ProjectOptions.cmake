@@ -869,7 +869,7 @@ set_feature_for_printers(HAS_FILAMENT_SLOTS "COREONE_INDX")
 set_feature_for_printers_master_board(HAS_PRESSURE_ADVANCE_CALIBRATION "COREONE_INDX")
 
 # On/off switch for an LED strip on the GPIO board's first open-drain output (IO expander pin 0).
-# Only on the printer it is tested on.
+# Only on the printer it was written for.
 set_feature_for_printers_master_board(HAS_AUX_CHAMBER_LIGHT "COREONE_INDX")
 if(HAS_AUX_CHAMBER_LIGHT AND NOT HAS_I2C_EXPANDER)
   message(FATAL_ERROR "HAS_AUX_CHAMBER_LIGHT needs HAS_I2C_EXPANDER")
