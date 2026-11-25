@@ -27,13 +27,15 @@ bool TCA6408A::update_register(Register reg, uint8_t value, uint8_t pin_mask) {
             break;
         }
 
-        if ((curr_reg & pin_mask) == (value & pin_mask)) {
-            return true;
-        }
         // Set up pins selected by pin_mask in config register, other pins remain the unchanged
         curr_reg = (curr_reg & ~pin_mask) | (value & pin_mask);
     }
 
+    // Written even when the stored bits already match: the chip may have reset to its defaults since.
+    // Outputs get their stored levels first, as at startup, rather than the chip's reset ones.
+    if (reg == Register::Config && !write_reg(Register::Output, config_store().io_expander_output_register.get())) {
+        return false;
+    }
     if (!write_reg(reg, curr_reg)) {
         return false;
     }

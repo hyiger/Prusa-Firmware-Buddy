@@ -41,10 +41,13 @@ public:
      */
     std::optional<uint8_t> read(uint8_t pin_mask = 0xFF) const;
 
-    /** @brief Checks expander's register and update it to match expected value.
+    /** @brief Writes the bits of value in pin_mask to the expander's register, and the rest of it from
+     *  the stored copy, which then gets the new value. The register is written even when the stored
+     *  copy already matches, which sets up a chip that has reset since. Writing Config writes the
+     *  stored Output first.
      *  @param reg Register to be updated
-     *  @param value each bit corresponds to a pin, setting a pin to 1 == input, 0 == output
-     *  @param pin_mask Only bits (pins) in pin_mask will be check / set
+     *  @param value each bit corresponds to a pin; for Config, 1 == input, 0 == output
+     *  @param pin_mask Only bits (pins) in pin_mask are set
      *  @return true on successful write to register, false otherwise
      */
     bool update_register(Register reg, uint8_t value, uint8_t pin_mask = 0xFF);
