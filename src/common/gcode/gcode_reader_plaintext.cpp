@@ -136,6 +136,15 @@ IGcodeReader::Result_t PlainGcodeReader::stream_get_line(GcodeBuffer &buffer, Co
         if (output) {
             return Result_t::RESULT_OK;
         }
+
+        // A line left out goes whole, or the rest of a long one would come out as a line of its own.
+        // Discard has read it to its end already.
+        while (line_continations == Continuations::Split && !buffer.line_complete) {
+            res = stream_get_line_common(buffer, line_continations);
+            if (res != Result_t::RESULT_OK) {
+                return res;
+            }
+        }
     }
     return Result_t::RESULT_EOF;
 }

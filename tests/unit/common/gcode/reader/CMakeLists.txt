@@ -79,9 +79,30 @@ target_include_directories(
 target_link_libraries(gcode_info_test gcode_reader_test_base version uuid)
 add_catch_test(gcode_info_test)
 
+# The per-tool metadata lines of 8 tools, as on the Core One INDX, outgrow the line buffer
+add_executable(
+  gcode_info_eight_tools_test
+  ${CMAKE_SOURCE_DIR}/src/common/gcode/gcode_info.cpp
+  ${CMAKE_SOURCE_DIR}/src/common/printer_model.cpp ${CMAKE_SOURCE_DIR}/src/common/str_utils.cpp
+  ${CMAKE_SOURCE_DIR}/src/common/utils/color.cpp gcode_info_eight_tools_test.cpp
+  )
+target_include_directories(
+  gcode_info_eight_tools_test BEFORE PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/stub_eight_tools
+  )
+target_include_directories(
+  gcode_info_eight_tools_test
+  PUBLIC ${CMAKE_SOURCE_DIR}/tests/stubs # Must be before lib/Marlin include
+         ${CMAKE_SOURCE_DIR}/lib/Marlin/Marlin/src ${CMAKE_SOURCE_DIR}/src/lang
+         ${CMAKE_SOURCE_DIR}/src/common
+  )
+target_link_libraries(gcode_info_eight_tools_test gcode_reader_test_base version uuid)
+add_catch_test(gcode_info_eight_tools_test)
+
 file(
   COPY ${CMAKE_CURRENT_SOURCE_DIR}/test_plain.gcode
        ${CMAKE_CURRENT_SOURCE_DIR}/test_total_toolchanges.gcode
+       ${CMAKE_CURRENT_SOURCE_DIR}/test_eight_tools.gcode
+       ${CMAKE_CURRENT_SOURCE_DIR}/test_metadata_too_long.gcode
        ${CMAKE_CURRENT_SOURCE_DIR}/test_binary_no_compression.bgcode
        ${CMAKE_CURRENT_SOURCE_DIR}/test_binary_meatpack.bgcode
        ${CMAKE_CURRENT_SOURCE_DIR}/test_binary_heatshrink.bgcode
