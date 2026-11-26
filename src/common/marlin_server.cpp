@@ -87,6 +87,10 @@
 
 #include <option/has_power_panic.h>
 #include <option/has_spool_join.h>
+#include <option/has_usb_drive_format.h>
+#if HAS_USB_DRIVE_FORMAT()
+    #include <usb_host.h>
+#endif
 #if HAS_SPOOL_JOIN()
     #include "module/prusa/spool_join.hpp"
 #endif
@@ -304,6 +308,11 @@ static_assert(std::to_underlying(RequestFlag::_cnt) <= 32, "There are more flags
 static MutexAtomic<EncodedFSMResponse, freertos::Mutex> fsm_response = empty_encoded_fsm_response;
 
 namespace {
+
+#if HAS_USB_DRIVE_FORMAT()
+    /// Print starts that hold off formatting of the USB drive until the variables show their print state
+    uint8_t unpublished_print_starts = 0;
+#endif
 
     struct server_t {
         State print_state; // printing state (printing, paused, ...)
@@ -1525,6 +1534,15 @@ void print_start(const char *filename, const GCodeReaderPosition &resume_pos, Pr
     if (filename == nullptr) {
         return;
     }
+
+#if HAS_USB_DRIVE_FORMAT()
+    if (!usb_host::begin_print_start()) {
+        log_warning(MarlinServer, "Not starting the print: the USB drive is being formatted");
+        return;
+    }
+    // Formatting reads the print state of the variables, so the start holds it off until they show it
+    ScopeGuard publish_print_start = [] { ++unpublished_print_starts; };
+#endif
 
     // Clear warnings before print, like heaters disabled after 30 minutes.
     clear_warning(WarningType::HeatersTimeout);
@@ -3675,6 +3693,11 @@ static void _server_update_vars() {
 
     // print state is updated last, to make sure other related variables (like job_id, filenames) are already set when we start print
     marlin_vars().print_state = static_cast<State>(server.print_state);
+#if HAS_USB_DRIVE_FORMAT()
+    for (; unpublished_print_starts > 0; --unpublished_print_starts) {
+        usb_host::end_print_start();
+    }
+#endif
 
     marlin_vars().media_position = media_position();
 

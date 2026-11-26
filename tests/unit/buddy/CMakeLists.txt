@@ -1,0 +1,3 @@
+add_executable(usb_format_exclusion_tests usb_format_exclusion_tests.cpp)
+target_include_directories(usb_format_exclusion_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/buddy)
+add_catch_test(usb_format_exclusion_tests)

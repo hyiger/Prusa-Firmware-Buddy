@@ -6,6 +6,10 @@
 #include <algorithm>
 #include <cstring>
 #include <bsod/bsod.h>
+#include <option/has_usb_drive_format.h>
+#if HAS_USB_DRIVE_FORMAT()
+    #include <usb_host.h>
+#endif
 
 using std::min;
 using std::nullopt;
@@ -173,6 +177,13 @@ optional<Monitor::Slot> Monitor::allocate(Type type, const char *dest, size_t ex
         // There's another tranfer ongoing, can't start another one.
         return nullopt;
     }
+
+#if HAS_USB_DRIVE_FORMAT()
+    // Under the lock, so that a format starting now sees this transfer once it is active
+    if (usb_host::is_formatting()) {
+        return nullopt;
+    }
+#endif
 
     if (current_id.load() == static_cast<transfers::TransferId>(0)) {
         // Special-case: lazy initialize by a random number. Initialization in

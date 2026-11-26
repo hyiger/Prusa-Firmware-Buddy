@@ -1049,9 +1049,10 @@ MI_FORMAT_USB_DRIVE::MI_FORMAT_USB_DRIVE()
 
 void MI_FORMAT_USB_DRIVE::click(IWindowMenu & /*window_menu*/) {
     // Formatting takes the file system from under whoever uses it
+    static constexpr const char *busy_text = N_("Not available while a print or a file transfer is in progress.");
     const auto is_refused = [] {
         if (!marlin_client::is_idle() || transfers::Monitor::instance.status().has_value()) {
-            MsgBoxWarning(_("Not available while a print or a file transfer is in progress."), Responses_Ok);
+            MsgBoxWarning(_(busy_text), Responses_Ok);
             return true;
         }
         if (logging::file_log_is_enabled()) {
@@ -1071,7 +1072,8 @@ void MI_FORMAT_USB_DRIVE::click(IWindowMenu & /*window_menu*/) {
     if (MsgBoxWarning(_("Format the USB drive as FAT32? All data on it will be erased."), Responses_YesNo, 1) != Response::Yes) {
         return;
     }
-    // A print or a transfer may have started while the question was on the screen
+    // A print or a transfer may have started while the question was on the screen. The format checks
+    // again, as one may start after this too.
     if (is_refused()) {
         return;
     }
@@ -1083,7 +1085,7 @@ void MI_FORMAT_USB_DRIVE::click(IWindowMenu & /*window_menu*/) {
     window_dlg_wait_t::wait_until(_("Formatting USB drive"), [&] { return !job.is_active(); });
 
     const usb_host::FormatResult result = job.state() == AsyncJobBase::State::finished ? job.result() : usb_host::FormatResult::failed;
-    if (result != usb_host::FormatResult::too_small) {
+    if (result != usb_host::FormatResult::too_small && result != usb_host::FormatResult::busy) {
         // A format that failed may have erased the drive all the same.
         // PrusaLink and Connect list the files anew only when told of a change.
         transfers::ChangedPath::instance.changed_path(transfers::USB_MOUNT_POINT, transfers::ChangedPath::Type::Folder, transfers::ChangedPath::Incident::Combined);
@@ -1094,6 +1096,9 @@ void MI_FORMAT_USB_DRIVE::click(IWindowMenu & /*window_menu*/) {
         break;
     case usb_host::FormatResult::too_small:
         MsgBoxError(_("The USB drive is too small for FAT32."), Responses_Ok);
+        break;
+    case usb_host::FormatResult::busy:
+        MsgBoxWarning(_(busy_text), Responses_Ok);
         break;
     case usb_host::FormatResult::failed:
         MsgBoxError(_("Formatting of the USB drive failed."), Responses_Ok);
