@@ -427,6 +427,9 @@ void filament_gcodes::M1700_preheat(const M1700Args &args) {
     if (args.save && response != Response::Cooldown) {
         for (const VirtualToolIndex tool : iterator) {
             config_store().set_filament_type(tool, filament);
+#if HAS_FILAMENT_SLOTS()
+            FilamentSpool::keep_spool_color(tool);
+#endif
         }
     }
 

@@ -570,7 +570,12 @@ std::optional<FrameToolMapping::ToolMatchResult> FrameToolMapping::suggest_virtu
         }
 
         const VirtualToolIndex virtual_tool = *item.virtual_tool;
+#if HAS_FILAMENT_SLOTS()
+        // The color the mapping shows, which follows an edit of a user library color
+        const OptionalColor virtual_color = FilamentSpool::display_color(virtual_tool);
+#else
         const OptionalColor virtual_color = FilamentType::for_tool(virtual_tool).parameters().color;
+#endif
 
         PenaltyBuilder penalty_builder = default_penalty_builder;
 

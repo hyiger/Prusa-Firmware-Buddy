@@ -25,6 +25,8 @@ enum class FormatResult {
     formatted,
     /// Too small for FAT32. Nothing was written to it.
     too_small,
+    /// Not idle, or a print is starting or a transfer is on. Nothing was written to the drive.
+    busy,
     failed,
 };
 
@@ -32,10 +34,21 @@ enum class FormatResult {
 /// larger one.
 ///
 /// Blocks until done: seconds on a small drive, minutes on a very large one. The access of other tasks
-/// to the drive fails meanwhile and the files they have open on it are lost, so call it when nothing
-/// uses the drive. A format that fails after its first write leaves the drive with no file system,
-/// unless all that failed is the mount of the finished one.
+/// to the drive fails meanwhile and the files they have open on it are lost. Refused unless the
+/// printer is idle with no transfer; no print or transfer starts until it is done. A format that fails
+/// after its first write leaves the drive with no file system, unless all that failed is the mount of
+/// the finished one.
 FormatResult format_drive();
+
+/// Called by the Marlin thread before it starts a print. \returns false while the drive is being
+/// formatted, and the print must not start. Otherwise end_print_start must follow once the print
+/// state that other tasks read shows the print, or once the start is given up.
+bool begin_print_start();
+void end_print_start();
+
+/// \returns whether the drive is being formatted. A transfer must not start meanwhile: check it under
+/// the transfer monitor's lock.
+bool is_formatting();
     #endif
 } // namespace usb_host
 

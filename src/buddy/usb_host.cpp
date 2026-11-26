@@ -13,7 +13,9 @@
 
 #if HAS_USB_DRIVE_FORMAT()
     #include "usbh_async_diskio.hpp"
+    #include "usb_format_exclusion.hpp"
     #include <heap.h>
+    #include <transfers/monitor.hpp>
     #include <logging/log.hpp>
     #include <raii/scope_guard.hpp>
     #include <algorithm>
@@ -69,16 +71,40 @@ namespace {
     /// at the least, and its data area starts at the alignment
     constexpr DWORD min_drive_sectors = mkfs_parameters.align + 65526;
 
+    UsbFormatExclusion format_exclusion;
+
 } // namespace
 
 bool is_drive_attached() {
     return !(disk_status(0) & STA_NOINIT);
 }
 
+bool begin_print_start() {
+    return format_exclusion.begin_print_start();
+}
+
+void end_print_start() {
+    format_exclusion.end_print_start();
+}
+
+bool is_formatting() {
+    return format_exclusion.is_formatting();
+}
+
 FormatResult format_drive() {
     if (!is_drive_attached()) {
         return FormatResult::failed;
     }
+
+    // The menu checked this before asking, but a print or a transfer may have started since
+    const bool may_format = format_exclusion.begin_format([] {
+        return !marlin_client::is_idle() || transfers::Monitor::instance.status().has_value();
+    });
+    if (!may_format) {
+        log_warning(USBHost, "Not formatting the drive: a print or a transfer uses it");
+        return FormatResult::busy;
+    }
+    ScopeGuard end_format = [] { format_exclusion.end_format(); };
 
     // f_mkfs turns down a drive too small for FAT32, but only once the old partition tables are gone
     DWORD drive_sectors = 0;

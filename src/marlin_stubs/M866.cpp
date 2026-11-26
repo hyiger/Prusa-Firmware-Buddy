@@ -85,6 +85,9 @@ void PrusaGcodeSuite::M866() {
     }
 
     FilamentSpool::set_for_tool(tool, spool);
+    if (color_name) {
+        FilamentSpool::apply_color_to_loaded_filament(tool);
+    }
 
     const auto material = type.parameters().name;
     const auto vendor = spool.vendor.name();

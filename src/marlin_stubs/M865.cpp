@@ -4,6 +4,10 @@
 
 #include <common/aggregate_arity.hpp>
 #include <filament.hpp>
+#include <option/has_filament_slots.h>
+#if HAS_FILAMENT_SLOTS()
+    #include <filament_library.hpp>
+#endif
 #include <temperature.hpp>
 #include <tool_index.hpp>
 
@@ -193,6 +197,9 @@ void PrusaGcodeSuite::M865() {
     /// MUST be after set_parameters. In case of pendingadhoc -> adhoc loading, the data is copied
     if (auto load = p.option<uint8_t, uint8_t, uint8_t>('L', 0, VirtualToolIndex::count - 1)) {
         config_store().set_filament_type(VirtualToolIndex::from_raw(*load), filament_type);
+#if HAS_FILAMENT_SLOTS()
+        FilamentSpool::keep_spool_color(VirtualToolIndex::from_raw(*load));
+#endif
     }
 
     if (filament_type != FilamentType::none) {
