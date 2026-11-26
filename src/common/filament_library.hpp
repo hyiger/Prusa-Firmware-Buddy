@@ -259,9 +259,20 @@ struct FilamentSpool {
     /// A purge does not clear it.
     static void finish_load(VirtualToolIndex tool, bool clear_without_pick);
 
+    /// Gives the filament loaded in \p tool the color of its spool, none included, as a load of that
+    /// color does: a filament without that color becomes the tool's ad-hoc one. Called after the spool's
+    /// color is changed in Filament Slots or with M866, as Prusa Connect reports the loaded filament's
+    /// color, and a spool without a color shows it.
+    static void apply_color_to_loaded_filament(VirtualToolIndex tool);
+
+    /// Called after the filament loaded in \p tool is changed without a load, which keeps the spool.
+    /// Gives the new filament the spool's color, if the spool has one, so that it shows and reports
+    /// the same as the slot.
+    static void keep_spool_color(VirtualToolIndex tool);
+
     /// \returns the color to show for the filament in \p tool: the spool's color, else the loaded
     /// filament's own, such as one set by a load from G-code. std::nullopt when the tool is empty.
-    /// The spool goes first because the Filament Slots screen and M866 change only the spool.
+    /// The spool goes first because a color of the user library follows edits of that color.
     static OptionalColor display_color(VirtualToolIndex tool);
 
     constexpr bool operator==(const FilamentSpool &) const = default;

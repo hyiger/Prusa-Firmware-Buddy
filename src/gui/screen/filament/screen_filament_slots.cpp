@@ -163,6 +163,7 @@ bool MI_TYPE::on_item_selected(const OnItemSelectedArgs &args) {
     }
 
     config_store().set_filament_type(tool_, new_type);
+    FilamentSpool::keep_spool_color(tool_);
     return true;
 }
 
@@ -189,6 +190,7 @@ void MI_COLOR::click(IWindowMenu &menu) {
             auto spool = FilamentSpool::for_tool(tool_);
             spool.color = *color;
             FilamentSpool::set_for_tool(tool_, spool);
+            FilamentSpool::apply_color_to_loaded_filament(tool_);
         }
         set_tool(tool_);
     }

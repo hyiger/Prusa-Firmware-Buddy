@@ -354,6 +354,32 @@ void FilamentSpool::finish_load(VirtualToolIndex tool, bool clear_without_pick) 
     }
 }
 
+void FilamentSpool::apply_color_to_loaded_filament(VirtualToolIndex tool) {
+    const FilamentType type = FilamentType::for_tool(tool);
+    if (type == FilamentType::none) {
+        return;
+    }
+
+    FilamentTypeParameters parameters = type.parameters();
+    const OptionalColor new_color = for_tool(tool).color.color();
+    if (parameters.color == new_color) {
+        return;
+    }
+    parameters.color = new_color;
+
+    const FilamentType adhoc = AdHocFilamentType { tool };
+    adhoc.set_parameters(parameters);
+    if (type != adhoc) {
+        config_store().set_filament_type(tool, adhoc);
+    }
+}
+
+void FilamentSpool::keep_spool_color(VirtualToolIndex tool) {
+    if (for_tool(tool).color.color()) {
+        apply_color_to_loaded_filament(tool);
+    }
+}
+
 OptionalColor FilamentSpool::display_color(VirtualToolIndex tool) {
     const FilamentType type = FilamentType::for_tool(tool);
     if (type == FilamentType::none) {
