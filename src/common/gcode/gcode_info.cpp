@@ -35,6 +35,14 @@ LOG_COMPONENT_REF(Buddy);
 #include <config_store/store_instance.hpp>
 #include <bsod/bsod.h>
 
+namespace {
+
+/// Room for a metadata line and its terminator. After the name, a per-tool list takes up to 12
+/// characters a tool: "#RRGGBB;" for a color, "330000.00, " for the length of a full spool.
+using MetadataLine = std::array<char, std::max<size_t>(std::tuple_size_v<GcodeBuffer::Container>, 32 + 12 * EXTRUDERS + 1)>;
+
+} // namespace
+
 GCodeInfo &GCodeInfo::getInstance() {
     static GCodeInfo instance;
     return instance;
@@ -112,8 +120,11 @@ void GCodeInfo::load(IGcodeReader &reader) {
 
     // parse metadata
     if (reader.stream_metadata_start(&index)) {
+        MetadataLine line;
+        size_t line_length = 0;
+        bool line_cut = false;
         while (true) {
-            auto res = reader.stream_get_line(buffer, IGcodeReader::Continuations::Discard);
+            auto res = reader.stream_get_line(buffer, IGcodeReader::Continuations::Split);
 
             // valid_for_print should is supposed to make sure that file is downloaded-enough to not run out of bounds here.
             debug_assert(res != IGcodeReader::Result_t::RESULT_OUT_OF_RANGE);
@@ -121,7 +132,24 @@ void GCodeInfo::load(IGcodeReader &reader) {
                 break;
             }
 
-            parse_comment(buffer.line, plaintext_gcodes);
+            const size_t chunk_length = std::min<size_t>(buffer.line.len(), line.size() - 1 - line_length);
+            line_cut |= chunk_length < buffer.line.len();
+            std::copy_n(buffer.line.begin, chunk_length, line.begin() + line_length);
+            line_length += chunk_length;
+            if (!buffer.line_complete) {
+                continue;
+            }
+
+            if (line_cut) {
+                // A value cut in the middle reads as a different one, so the line ends before it
+                do {
+                    --line_length;
+                } while (line_length > 0 && line[line_length] != ',' && line[line_length] != ';');
+            }
+            line[line_length] = '\0';
+            parse_comment(GcodeBuffer::String(line.begin(), line.begin() + line_length), plaintext_gcodes);
+            line_length = 0;
+            line_cut = false;
         }
 
     } else {

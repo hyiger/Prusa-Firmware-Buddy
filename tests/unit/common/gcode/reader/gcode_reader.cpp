@@ -6,6 +6,8 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include <deque>
+#include <string>
+#include <vector>
 #include <iostream>
 #include <fstream>
 #include <sys/stat.h>
@@ -1078,5 +1080,36 @@ TEST_CASE("Encrypted bgcode corrupted metadata") {
     SECTION("full asymmetric check") {
         REQUIRE_FALSE(reader->valid_for_print(true));
         REQUIRE(strcmp(reader->error_str(), e2ee::corrupted_metadata) == 0);
+    }
+}
+
+TEST_CASE("Reader: Metadata leaves out a long G-code line whole") {
+    static constexpr const char *file_name = "test_long_gcode_in_metadata.gcode";
+    {
+        std::ofstream file(file_name);
+        // The comment starts past the line buffer, so a split read gets it as a chunk of its own
+        file << "; a = 1\n"
+             << std::string("G1 X10 Y10 E1").append(81 - 13, ' ') << "; comment = 2\n"
+             << "; b = 3\n"
+             << "G1 X0\n";
+    }
+
+    for (const auto continuations : { IGcodeReader::Continuations::Split, IGcodeReader::Continuations::Discard }) {
+        INFO("Split: " << (continuations == IGcodeReader::Continuations::Split));
+        AnyGcodeFormatReader reader(file_name);
+        REQUIRE(reader.is_open());
+        REQUIRE(reader.get()->stream_metadata_start());
+
+        std::vector<std::string> lines;
+        std::string line;
+        GcodeBuffer buffer;
+        while (reader.get()->stream_get_line(buffer, continuations) == IGcodeReader::Result_t::RESULT_OK) {
+            line.append(buffer.line.begin, buffer.line.end);
+            if (buffer.line_complete || continuations == IGcodeReader::Continuations::Discard) {
+                lines.push_back(line);
+                line.clear();
+            }
+        }
+        CHECK(lines == std::vector<std::string> { "; a = 1", "; b = 3" });
     }
 }
