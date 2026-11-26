@@ -199,6 +199,7 @@ jobs:
           - **Automatic pressure advance, Core One INDX only**: the printer can measure the pressure advance of each tool with the load cell at the start of a print and use it in place of the one from the filament profile. Off by default. Tried on one printer with three filaments so far, where it came out within about 30 % of what printed line tests of the same speed looked best with.
           - **Formatting the USB drive**: Settings > System > Format USB Drive erases the drive in the printer and makes it FAT32, the file system the printer reads. Not yet tried on a printer.
           - **Aux chamber light**: Settings > Lights has a switch for an LED strip wired to the GPIO board's first open-drain output. Not yet verified on hardware.
+          - **Per-tool G-code metadata**: the printer reads the filament lengths, weights and colors of all eight tools from a G-code file. Stock ${BASE_VERSION} lost those of the last tools.
 
           The printer shows its version as `${VERSION}`, so it can be told apart from Prusa's build. Prusa Connect is the exception, see below.
 
@@ -274,6 +275,10 @@ jobs:
           Settings > Lights, also reachable from Tune during a print, has an Aux Chamber Light switch for an LED strip wired to the first open-drain output of the GPIO board, which is pin 0 of the board's IO expander. The switch sends `M262 P0 B0` and then `M264 P0 B1` or `M264 P0 B0`, the commands start and end G-code can use for the same strip, and it follows what such G-code sets. During a print the switch spins until the printer gets to the command, after the one it is running. The printer keeps the state across restarts. The switch is hidden when the GPIO board does not answer at startup.
 
           This has not been tested on a printer yet.
+
+          ### Per-tool G-code metadata
+
+          The slicer writes the filament lengths of all tools on one line of the G-code file, their weights on another and their colors on a third. Stock ${BASE_VERSION} reads only the first 80 characters of a line. With eight tools the colors are always longer than that, the lengths once the tools use more than about a meter each, and the weights once they use about 100 g each. The last tools then had no value, or one cut in the middle that read as a different number, and a tool left without its weight counted as unused on the tool mapping screen and in the filament checks. This build reads the whole line.
 
           ### Flashing
 
